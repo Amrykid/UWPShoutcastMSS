@@ -21,5 +21,8 @@ await Task.Delay(500);
 BackgroundMediaPlayer.Current.Play();
 ```
 
+## Want to contribute?
+I'm pretty new to the open source scene so if you have any contributes, feel free to send a pull request. I will be re-evaluating the license of the code in the future if it is a problem. I will also be looking into setting up a Nuget package if this library takes off.
+
 ## Known Issues
-- AAC streams aren't support at this time.
+- AAC streams aren't supported at this time.
