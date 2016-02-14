@@ -5,6 +5,8 @@ VisualStudioVersion = 14.0.24720.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UWPShoutcastMSS", "src\UWPShoutcastMSS\UWPShoutcastMSS.csproj", "{99BF0EFD-5F65-489A-B2F7-F11CC89B81B8}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TestApp", "src\TestApp\TestApp.csproj", "{E1734010-BB7D-4775-AED7-E9A87674C862}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -33,6 +35,28 @@ Global
 		{99BF0EFD-5F65-489A-B2F7-F11CC89B81B8}.Release|x64.Build.0 = Release|x64
 		{99BF0EFD-5F65-489A-B2F7-F11CC89B81B8}.Release|x86.ActiveCfg = Release|x86
 		{99BF0EFD-5F65-489A-B2F7-F11CC89B81B8}.Release|x86.Build.0 = Release|x86
+		{E1734010-BB7D-4775-AED7-E9A87674C862}.Debug|Any CPU.ActiveCfg = Debug|x86
+		{E1734010-BB7D-4775-AED7-E9A87674C862}.Debug|Any CPU.Build.0 = Debug|x86
+		{E1734010-BB7D-4775-AED7-E9A87674C862}.Debug|Any CPU.Deploy.0 = Debug|x86
+		{E1734010-BB7D-4775-AED7-E9A87674C862}.Debug|ARM.ActiveCfg = Debug|ARM
+		{E1734010-BB7D-4775-AED7-E9A87674C862}.Debug|ARM.Build.0 = Debug|ARM
+		{E1734010-BB7D-4775-AED7-E9A87674C862}.Debug|ARM.Deploy.0 = Debug|ARM
+		{E1734010-BB7D-4775-AED7-E9A87674C862}.Debug|x64.ActiveCfg = Debug|x64
+		{E1734010-BB7D-4775-AED7-E9A87674C862}.Debug|x64.Build.0 = Debug|x64
+		{E1734010-BB7D-4775-AED7-E9A87674C862}.Debug|x64.Deploy.0 = Debug|x64
+		{E1734010-BB7D-4775-AED7-E9A87674C862}.Debug|x86.ActiveCfg = Debug|x86
+		{E1734010-BB7D-4775-AED7-E9A87674C862}.Debug|x86.Build.0 = Debug|x86
+		{E1734010-BB7D-4775-AED7-E9A87674C862}.Debug|x86.Deploy.0 = Debug|x86
+		{E1734010-BB7D-4775-AED7-E9A87674C862}.Release|Any CPU.ActiveCfg = Release|x86
+		{E1734010-BB7D-4775-AED7-E9A87674C862}.Release|ARM.ActiveCfg = Release|ARM
+		{E1734010-BB7D-4775-AED7-E9A87674C862}.Release|ARM.Build.0 = Release|ARM
+		{E1734010-BB7D-4775-AED7-E9A87674C862}.Release|ARM.Deploy.0 = Release|ARM
+		{E1734010-BB7D-4775-AED7-E9A87674C862}.Release|x64.ActiveCfg = Release|x64
+		{E1734010-BB7D-4775-AED7-E9A87674C862}.Release|x64.Build.0 = Release|x64
+		{E1734010-BB7D-4775-AED7-E9A87674C862}.Release|x64.Deploy.0 = Release|x64
+		{E1734010-BB7D-4775-AED7-E9A87674C862}.Release|x86.ActiveCfg = Release|x86
+		{E1734010-BB7D-4775-AED7-E9A87674C862}.Release|x86.Build.0 = Release|x86
+		{E1734010-BB7D-4775-AED7-E9A87674C862}.Release|x86.Deploy.0 = Release|x86
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

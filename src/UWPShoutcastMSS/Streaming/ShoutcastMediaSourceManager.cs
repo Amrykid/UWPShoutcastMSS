@@ -79,6 +79,7 @@ namespace UWPShoutcastMSS.Streaming
         public async Task ConnectAsync(uint sampleRate = 44100, string relativePath = ";")
         {
             await HandleConnection(relativePath);
+            //Surprised that this commented-out-bit is broken.
             //AudioEncodingProperties obtainedProperties = await GetEncodingPropertiesAsync();
 
             switch (contentType)
