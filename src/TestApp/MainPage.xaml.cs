@@ -42,6 +42,11 @@ namespace TestApp
                     Name = "yggdrasilradio.net (AAC, 56kb)",
                     Url = new Uri("http://95.211.241.92:9100/")
                 },
+                new StationItem
+                {
+                    Name = "OZFM (AAC, 96kb)",
+                    Url = new Uri("http://174.37.159.206:8262/stream")
+                }
             };
 
             stationComboBox.SelectedIndex = 0;

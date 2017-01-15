@@ -19,7 +19,8 @@ namespace UWPShoutcastMSS.Streaming
         public enum StreamAudioFormat
         {
             MP3,
-            AAC
+            AAC,
+            AAC_ADTS //https://en.wikipedia.org/wiki/High-Efficiency_Advanced_Audio_Coding
         }
 
         public Windows.Media.Core.MediaStreamSource MediaStreamSource { get; private set; }
@@ -117,27 +118,34 @@ namespace UWPShoutcastMSS.Streaming
         {
             ShouldGetMetadata = getMetadata;
 
-            await EstablishConnectionAsync(relativePath);
+            this.relativePath = relativePath;
+
+            await EstablishConnectionAsync();
 
             if (connected == false) return null;
 
-            //AudioEncodingProperties obtainedProperties = await GetEncodingPropertiesAsync();
+            AudioEncodingProperties obtainedProperties = null; //await GetEncodingPropertiesAsync();
 
             switch (contentType)
             {
                 case StreamAudioFormat.MP3:
                     {
-                        MediaStreamSource = new Windows.Media.Core.MediaStreamSource(
-                            new AudioStreamDescriptor(AudioEncodingProperties.CreateMp3(sampleRate, channelCount, (uint)bitRate)));
+                        obtainedProperties = AudioEncodingProperties.CreateMp3(sampleRate, channelCount, (uint)bitRate);
                     }
                     break;
                 case StreamAudioFormat.AAC:
                     {
-                        MediaStreamSource = new MediaStreamSource(
-                            new AudioStreamDescriptor(AudioEncodingProperties.CreateAacAdts(sampleRate, channelCount, (uint)bitRate)));
+                        obtainedProperties = AudioEncodingProperties.CreateAac(sampleRate, channelCount, (uint)bitRate);
+                    }
+                    break;
+                case StreamAudioFormat.AAC_ADTS:
+                    {
+                        obtainedProperties = AudioEncodingProperties.CreateAacAdts(sampleRate, channelCount, (uint)bitRate);
                     }
                     break;
             }
+
+            MediaStreamSource = new Windows.Media.Core.MediaStreamSource(new AudioStreamDescriptor(obtainedProperties));
 
             MediaStreamSource.SampleRequested += MediaStreamSource_SampleRequested;
             MediaStreamSource.CanSeek = false;
@@ -231,7 +239,7 @@ namespace UWPShoutcastMSS.Streaming
 
         }
 
-        private async Task EstablishConnectionAsync(string relativePath)
+        private async Task EstablishConnectionAsync()
         {
             //http://www.smackfu.com/stuff/programming/shoutcast.html
             try
@@ -283,15 +291,8 @@ namespace UWPShoutcastMSS.Streaming
             string response = string.Empty;
             while (!response.EndsWith(Environment.NewLine + Environment.NewLine))
             {
-                try
-                {
-                    await socketReader.LoadAsync(1);
-                    response += socketReader.ReadString(1);
-                }
-                catch(ArgumentOutOfRangeException)
-                {
-                    //No mapping for the Unicode character exists in the target multi-byte code page.
-                }
+                await socketReader.LoadAsync(1);
+                response += socketReader.ReadString(1);
             }
 
             if (response.StartsWith("HTTP/1.0 302") || response.StartsWith("HTTP/1.1 302"))
@@ -305,7 +306,7 @@ namespace UWPShoutcastMSS.Streaming
                 socket = new StreamSocket();
                 streamUrl = new Uri(parsedResponse.First(x => x.Key.ToLower() == "location").Value);
 
-                await EstablishConnectionAsync(relativePath);
+                await EstablishConnectionAsync();
 
                 return;
             }
@@ -353,8 +354,10 @@ namespace UWPShoutcastMSS.Streaming
                     contentType = StreamAudioFormat.MP3;
                     break;
                 case "audio/aac":
-                case "audio/aacp":
                     contentType = StreamAudioFormat.AAC;
+                    break;
+                case "audio/aacp":
+                    contentType = StreamAudioFormat.AAC_ADTS;
                     break;
             }
         }
@@ -431,6 +434,7 @@ namespace UWPShoutcastMSS.Streaming
                                 sampleLength = result.Item2;
                             }
                             break;
+                        case StreamAudioFormat.AAC_ADTS:
                         case StreamAudioFormat.AAC:
                             {
                                 Tuple<MediaStreamSample, uint> result = await ParseAACSampleAsync(partial: true, partialBytes: partialFrame);
@@ -457,6 +461,7 @@ namespace UWPShoutcastMSS.Streaming
                                 //await MediaStreamSample.CreateFromStreamAsync(socket.InputStream, bitRate, new TimeSpan(0, 0, 1));
                             }
                             break;
+                        case StreamAudioFormat.AAC_ADTS:
                         case StreamAudioFormat.AAC:
                             {
                                 Tuple<MediaStreamSample, uint> result = await ParseAACSampleAsync();
