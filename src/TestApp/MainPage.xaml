@@ -8,11 +8,31 @@
     mc:Ignorable="d">
 
     <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
-        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-            <Button Content="Play" Click="Button_Click"/>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="100" />
+            <RowDefinition Height="100" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Grid.Row="1">
+            <TextBlock Text="Now Playing" Style="{ThemeResource TitleTextBlockStyle}" />
             <TextBlock x:Name="SongBox" />
             <TextBlock x:Name="ArtistBox" />
         </StackPanel>
+
+        <Grid Grid.Row="2" HorizontalAlignment="Center">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="250" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            
+            <ComboBox x:Name="stationComboBox" DisplayMemberPath="Name" Width="250" Grid.Column="0"/>
+
+            <Button x:Name="playButton" Content="Play" Click="playButton_Click" Grid.Column="1" VerticalAlignment="Top"/>
+            <Button x:Name="stopButton" Content="Stop" Click="stopButton_Click" IsEnabled="False" Grid.Column="2" VerticalAlignment="Top"/>
+        </Grid>
 
         <MediaElement x:Name="MediaPlayer" Visibility="Collapsed" />
     </Grid>

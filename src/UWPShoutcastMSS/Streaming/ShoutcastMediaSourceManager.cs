@@ -283,8 +283,15 @@ namespace UWPShoutcastMSS.Streaming
             string response = string.Empty;
             while (!response.EndsWith(Environment.NewLine + Environment.NewLine))
             {
-                await socketReader.LoadAsync(1);
-                response += socketReader.ReadString(1);
+                try
+                {
+                    await socketReader.LoadAsync(1);
+                    response += socketReader.ReadString(1);
+                }
+                catch(ArgumentOutOfRangeException)
+                {
+                    //No mapping for the Unicode character exists in the target multi-byte code page.
+                }
             }
 
             if (response.StartsWith("HTTP/1.0 302") || response.StartsWith("HTTP/1.1 302"))
