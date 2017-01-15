@@ -10,14 +10,14 @@ using Windows.Media.MediaProperties;
 using Windows.Networking.Sockets;
 using Windows.Storage.Streams;
 using System.Runtime.InteropServices.WindowsRuntime;
+using Windows.Networking.Connectivity;
 
 namespace UWPShoutcastMSS.Streaming
 {
-    public class ShoutcastMediaSourceManager
+    public class ShoutcastMediaSourceStream
     {
         public enum StreamAudioFormat
         {
-            ///"audio/mpeg";
             MP3,
             AAC
         }
@@ -25,9 +25,17 @@ namespace UWPShoutcastMSS.Streaming
         public Windows.Media.Core.MediaStreamSource MediaStreamSource { get; private set; }
         public ShoutcastStationInfo StationInfo { get; private set; }
 
+        public bool ShouldGetMetadata { get; private set; }
+        public static string UserAgent { get; set; }
+
         StreamSocket socket = null;
         DataWriter socketWriter = null;
         DataReader socketReader = null;
+        private volatile bool connected = false;
+        private string relativePath = ";";
+        private uint sampleRate = 44100;
+        private uint channelCount = 2;
+        private ShoutcastServerType serverType = ShoutcastServerType.Shoutcast;
 
         Uri streamUrl = null;
 
@@ -47,9 +55,15 @@ namespace UWPShoutcastMSS.Streaming
             }
             catch (Exception) { }
 
-            socketWriter.Dispose();
-            socketReader.Dispose();
-            socket.Dispose();
+            try
+            {
+                socketWriter.Dispose();
+                socketReader.Dispose();
+                socket.Dispose();
+            }
+            catch (Exception) { }
+
+            connected = false;
         }
 
         //http://stackoverflow.com/questions/6294807/calculate-mpeg-frame-length-ms
@@ -64,38 +78,63 @@ namespace UWPShoutcastMSS.Streaming
         #endregion
 
         //TODO
-        UInt32 aac_sampleSize = 16;
+        UInt32 aac_sampleSize = 1024;
         TimeSpan aac_sampleDuration = new TimeSpan(0, 0, 0, 0, 70);
 
-        public ShoutcastMediaSourceManager(Uri url)
+        public ShoutcastMediaSourceStream(Uri url, ShoutcastServerType stationServerType = ShoutcastServerType.Shoutcast)
         {
             StationInfo = new ShoutcastStationInfo();
 
             streamUrl = url;
 
+            serverType = stationServerType;
+
             socket = new StreamSocket();
         }
 
-        public async Task ConnectAsync(uint sampleRate = 44100, string relativePath = ";")
+
+        public async Task ReconnectAsync()
         {
-            await HandleConnection(relativePath);
-            //Surprised that this commented-out-bit is broken.
+            if (MediaStreamSource == null) throw new InvalidOperationException();
+
+            metadataPos = 0;
+
+            try
+            {
+                socketWriter.Dispose();
+                socketReader.Dispose();
+                socket.Dispose();
+            }
+            catch (Exception) { }
+
+            connected = false;
+
+            socket = new StreamSocket();
+
+            await ConnectAsync(sampleRate, channelCount, relativePath, ShouldGetMetadata);
+        }
+        public async Task<MediaStreamSource> ConnectAsync(uint sampleRate = 44100, uint channelCount = 2, string relativePath = ";", bool getMetadata = true)
+        {
+            ShouldGetMetadata = getMetadata;
+
+            await EstablishConnectionAsync(relativePath);
+
+            if (connected == false) return null;
+
             //AudioEncodingProperties obtainedProperties = await GetEncodingPropertiesAsync();
 
             switch (contentType)
             {
                 case StreamAudioFormat.MP3:
                     {
-                        MediaStreamSource = new Windows.Media.Core.MediaStreamSource(new AudioStreamDescriptor(AudioEncodingProperties.CreateMp3(sampleRate, 2, (uint)bitRate)));
-                        //MediaStreamSource.AddStreamDescriptor(new AudioStreamDescriptor(AudioEncodingProperties.CreateMp3(48000, 2, (uint)bitRate)));
-                        //MediaStreamSource.AddStreamDescriptor(new AudioStreamDescriptor(AudioEncodingProperties.CreateMp3(32000, 2, (uint)bitRate)));
-                        //MediaStreamSource.AddStreamDescriptor(new AudioStreamDescriptor(AudioEncodingProperties.CreateMp3(24000, 2, (uint)bitRate)));
-                        //MediaStreamSource.AddStreamDescriptor(new AudioStreamDescriptor(AudioEncodingProperties.CreateMp3(22050, 2, (uint)bitRate)));
+                        MediaStreamSource = new Windows.Media.Core.MediaStreamSource(
+                            new AudioStreamDescriptor(AudioEncodingProperties.CreateMp3(sampleRate, channelCount, (uint)bitRate)));
                     }
                     break;
                 case StreamAudioFormat.AAC:
                     {
-                        MediaStreamSource = new MediaStreamSource(new AudioStreamDescriptor(AudioEncodingProperties.CreateAac(sampleRate, 2, (uint)bitRate)));
+                        MediaStreamSource = new MediaStreamSource(
+                            new AudioStreamDescriptor(AudioEncodingProperties.CreateAacAdts(sampleRate, channelCount, (uint)bitRate)));
                     }
                     break;
             }
@@ -104,6 +143,14 @@ namespace UWPShoutcastMSS.Streaming
             MediaStreamSource.CanSeek = false;
             MediaStreamSource.Starting += MediaStreamSource_Starting;
             MediaStreamSource.Closed += MediaStreamSource_Closed;
+
+            connected = true;
+            this.relativePath = relativePath;
+            this.sampleRate = sampleRate;
+            this.channelCount = channelCount;
+
+            return MediaStreamSource;
+
         }
 
         private async Task<AudioEncodingProperties> GetEncodingPropertiesAsync()
@@ -122,11 +169,15 @@ namespace UWPShoutcastMSS.Streaming
                         buffer = socketReader.ReadBuffer(mp3_sampleSize);
                         byteOffset += mp3_sampleSize;
 
+                        //todo find the sync bits for mp3 because it doesn't seem like we're receiving a full frame initially.
+
                         byte[] bytesHeader = buffer.ToArray(0, 5); //first four bytes
 
                         #region Modified version of http://sahanganepola.blogspot.com/2010/07/c-class-to-get-mp3-header-details.html
                         //I don't like copying code without understanding it but this is a case where i dont fully understand everything going on.
                         //I need to read up on bitmasking and such.
+
+                        //EDIT FROM FUTURE: Found this -> http://www.cprogramming.com/tutorial/bitwise_operators.html
 
                         var bithdr = (ulong)(((bytesHeader[0] & 255) << 24) | ((bytesHeader[1] & 255) << 16) | ((bytesHeader[2] & 255) << 8) | ((bytesHeader[3] & 255)));
 
@@ -167,15 +218,20 @@ namespace UWPShoutcastMSS.Streaming
             MediaStreamSource.Starting -= MediaStreamSource_Starting;
             MediaStreamSource.Closed -= MediaStreamSource_Closed;
             MediaStreamSource.SampleRequested -= MediaStreamSource_SampleRequested;
+
+            try
+            {
+                Disconnect();
+            }
+            catch (Exception) { }
         }
 
         private void MediaStreamSource_Starting(MediaStreamSource sender, MediaStreamSourceStartingEventArgs args)
         {
-            //args.Request.SetActualStartPosition(timeOffSet);
-            //args.Request.
+
         }
 
-        private async Task HandleConnection(string relativePath)
+        private async Task EstablishConnectionAsync(string relativePath)
         {
             //http://www.smackfu.com/stuff/programming/shoutcast.html
             try
@@ -185,32 +241,120 @@ namespace UWPShoutcastMSS.Streaming
                 socketWriter = new DataWriter(socket.OutputStream);
                 socketReader = new DataReader(socket.InputStream);
 
-                socketWriter.WriteString("GET /" + relativePath + " HTTP/1.1" + Environment.NewLine);
-                socketWriter.WriteString("Icy-MetaData: 1" + Environment.NewLine);
-                socketWriter.WriteString("User-Agent: Test Audio Player" + Environment.NewLine);
-                socketWriter.WriteString(Environment.NewLine);
-                await socketWriter.StoreAsync();
-                await socketWriter.FlushAsync();
-
-                string response = string.Empty;
-                while (!response.EndsWith(Environment.NewLine + Environment.NewLine))
-                {
-                    await socketReader.LoadAsync(1);
-                    response += socketReader.ReadString(1);
-                }
-
-                ParseResponse(response);
+                connected = true;
             }
             catch (Exception ex)
             {
-                MediaStreamSource.NotifyError(MediaStreamSourceErrorStatus.FailedToConnectToServer);
+                connected = false;
+
+                if (MediaStreamSource != null)
+                    MediaStreamSource.NotifyError(MediaStreamSourceErrorStatus.FailedToConnectToServer);
+                else
+                    throw new Exception("Connection Error", ex);
+
+                return;
             }
+
+            //todo figure out how to resolve http requests better to get rid of this hack.
+            String httpPath = "";
+
+            if (streamUrl.Host.Contains("radionomy.com") || serverType == ShoutcastServerType.Radionomy)
+            {
+                httpPath = streamUrl.LocalPath;
+                serverType = ShoutcastServerType.Radionomy;
+            }
+            else
+            {
+                httpPath = "/" + relativePath;
+            }
+
+            socketWriter.WriteString("GET " + httpPath + " HTTP/1.1" + Environment.NewLine);
+
+            if (ShouldGetMetadata)
+                socketWriter.WriteString("Icy-MetaData: 1" + Environment.NewLine);
+
+            socketWriter.WriteString("Host: " + streamUrl.Host + Environment.NewLine);
+            socketWriter.WriteString("Connection: Keep-Alive" + Environment.NewLine);
+            socketWriter.WriteString("User-Agent: " + (UserAgent ?? "Shoutcast Player (http://github.com/Amrykid/UWPShoutcastMSS") + Environment.NewLine);
+            socketWriter.WriteString(Environment.NewLine);
+            await socketWriter.StoreAsync();
+            await socketWriter.FlushAsync();
+
+            string response = string.Empty;
+            while (!response.EndsWith(Environment.NewLine + Environment.NewLine))
+            {
+                await socketReader.LoadAsync(1);
+                response += socketReader.ReadString(1);
+            }
+
+            if (response.StartsWith("HTTP/1.0 302") || response.StartsWith("HTTP/1.1 302"))
+            {
+                socketReader.Dispose();
+                socketWriter.Dispose();
+                socket.Dispose();
+
+                var parsedResponse = ParseHttpResponseToKeyPairArray(response.Split(new string[] { "\r\n" }, StringSplitOptions.None).Skip(1).ToArray());
+
+                socket = new StreamSocket();
+                streamUrl = new Uri(parsedResponse.First(x => x.Key.ToLower() == "location").Value);
+
+                await EstablishConnectionAsync(relativePath);
+
+                return;
+            }
+            else if (response.StartsWith("HTTP/1.0 404"))
+            {
+                throw new Exception("Station is unavailable.");
+            }
+            else if (response.StartsWith("ICY 401")) //ICY 401 Service Unavailable
+            {
+                if (MediaStreamSource != null)
+                    MediaStreamSource.NotifyError(MediaStreamSourceErrorStatus.FailedToConnectToServer);
+                else
+                    throw new Exception("Station is unavailable at this time. Maybe they're down for maintainence?");
+
+                return;
+            }
+            else if (response.StartsWith("HTTP/1.1 503")) //HTTP/1.1 503 Server limit reached
+            {
+                throw new Exception("Station is unavailable at this time. The maximum amount of listeners has been reached.");
+            }
+
+            ParseResponse(response);
         }
 
         private void ParseResponse(string response)
         {
             string[] responseSplitByLine = response.Split(new string[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries);
-            var headers = responseSplitByLine.Where(line => line.Contains(":")).Select(line =>
+            KeyValuePair<string, string>[] headers = ParseHttpResponseToKeyPairArray(responseSplitByLine);
+
+            StationInfo.StationName = headers.First(x => x.Key == "ICY-NAME").Value;
+            StationInfo.StationGenre = headers.First(x => x.Key == "ICY-GENRE").Value;
+
+            if (headers.Any(x => x.Key.ToUpper() == "ICY-DESCRIPTION"))
+                StationInfo.StationDescription = headers.First(x => x.Key.ToUpper() == "ICY-DESCRIPTION").Value;
+
+            if (StationInfoChanged != null)
+                StationInfoChanged(this, EventArgs.Empty);
+
+            bitRate = uint.Parse(headers.FirstOrDefault(x => x.Key == "ICY-BR").Value);
+            metadataInt = uint.Parse(headers.First(x => x.Key == "ICY-METAINT").Value);
+
+            switch (headers.First(x => x.Key == "CONTENT-TYPE").Value.ToLower().Trim())
+            {
+                case "audio/mpeg":
+                    contentType = StreamAudioFormat.MP3;
+                    break;
+                case "audio/aac":
+                case "audio/aacp":
+                    contentType = StreamAudioFormat.AAC;
+                    break;
+            }
+        }
+
+        private static KeyValuePair<string, string>[] ParseHttpResponseToKeyPairArray(string[] responseSplitByLine)
+        {
+            return responseSplitByLine.Where(line => line.Contains(":")).Select(line =>
             {
                 string header = line.Substring(0, line.IndexOf(":"));
                 string value = line.Substring(line.IndexOf(":") + 1);
@@ -219,25 +363,37 @@ namespace UWPShoutcastMSS.Streaming
 
                 return pair;
             }).ToArray();
+        }
 
-            StationInfo.StationName = headers.First(x => x.Key == "ICY-NAME").Value;
-            StationInfo.StationGenre = headers.First(x => x.Key == "ICY-GENRE").Value;
-
-            bitRate = uint.Parse(headers.FirstOrDefault(x => x.Key == "ICY-BR").Value);
-            metadataInt = uint.Parse(headers.First(x => x.Key == "ICY-METAINT").Value);
-            contentType = headers.First(x => x.Key == "CONTENT-TYPE").Value.ToUpper().Trim() == "AUDIO/MPEG" ? StreamAudioFormat.MP3 : StreamAudioFormat.AAC;
+        private static bool IsInternetConnected()
+        {
+            ConnectionProfile connections = NetworkInformation.GetInternetConnectionProfile();
+            bool internet = (connections != null) &&
+                (connections.GetNetworkConnectivityLevel() == NetworkConnectivityLevel.InternetAccess);
+            return internet;
         }
 
         private async void MediaStreamSource_SampleRequested(Windows.Media.Core.MediaStreamSource sender, Windows.Media.Core.MediaStreamSourceSampleRequestedEventArgs args)
         {
             var request = args.Request;
+
+            if (!IsInternetConnected() || !connected)
+            {
+                connected = false;
+                Disconnect();
+                sender.NotifyError(MediaStreamSourceErrorStatus.ConnectionToServerLost);
+                return;
+            }
+
+
             var deferral = request.GetDeferral();
 
             try
             {
                 MediaStreamSample sample = null;
+                uint sampleLength = 0;
 
-                request.ReportSampleProgress(25);
+                //request.ReportSampleProgress(25);
 
                 //if metadataPos is less than mp3_sampleSize away from metadataInt
                 if (metadataInt - metadataPos <= (contentType == StreamAudioFormat.MP3 ? mp3_sampleSize : aac_sampleSize) && metadataInt - metadataPos > 0)
@@ -246,7 +402,15 @@ namespace UWPShoutcastMSS.Streaming
 
                     byte[] partialFrame = new byte[metadataInt - metadataPos];
 
-                    await socketReader.LoadAsync(metadataInt - metadataPos);
+                    var read = await socketReader.LoadAsync(metadataInt - metadataPos);
+
+                    if (read == 0)
+                    {
+                        Disconnect();
+                        MediaStreamSource.NotifyError(MediaStreamSourceErrorStatus.ConnectionToServerLost);
+                        return;
+                    }
+
                     socketReader.ReadBytes(partialFrame);
 
                     metadataPos += metadataInt - metadataPos;
@@ -255,12 +419,16 @@ namespace UWPShoutcastMSS.Streaming
                     {
                         case StreamAudioFormat.MP3:
                             {
-                                sample = await ParseMP3SampleAsync(partial: true, partialBytes: partialFrame);
+                                Tuple<MediaStreamSample, uint> result = await ParseMP3SampleAsync(partial: true, partialBytes: partialFrame);
+                                sample = result.Item1;
+                                sampleLength = result.Item2;
                             }
                             break;
                         case StreamAudioFormat.AAC:
                             {
-                                sample = await ParseAACSampleAsync(partial: true, partialBytes: partialFrame);
+                                Tuple<MediaStreamSample, uint> result = await ParseAACSampleAsync(partial: true, partialBytes: partialFrame);
+                                sample = result.Item1;
+                                sampleLength = result.Item2;
                             }
                             break;
                     }
@@ -269,30 +437,46 @@ namespace UWPShoutcastMSS.Streaming
                 {
                     await HandleMetadata();
 
-                    request.ReportSampleProgress(50);
+                    //request.ReportSampleProgress(50);
 
                     switch (contentType)
                     {
                         case StreamAudioFormat.MP3:
                             {
                                 //mp3
-                                sample = await ParseMP3SampleAsync();
+                                Tuple<MediaStreamSample, uint> result = await ParseMP3SampleAsync();
+                                sample = result.Item1;
+                                sampleLength = result.Item2;
                                 //await MediaStreamSample.CreateFromStreamAsync(socket.InputStream, bitRate, new TimeSpan(0, 0, 1));
                             }
                             break;
                         case StreamAudioFormat.AAC:
                             {
-                                sample = await ParseAACSampleAsync();
+                                Tuple<MediaStreamSample, uint> result = await ParseAACSampleAsync();
+                                sample = result.Item1;
+                                sampleLength = result.Item2;
                             }
                             break;
                     }
 
-                    metadataPos += sample.Buffer.Length;
+                    try
+                    {
+                        if (sample == null || sampleLength == 0) //bug: on RELEASE builds, sample.Buffer causes the app to die due to a possible .NET Native bug
+                        {
+                            MediaStreamSource.NotifyError(MediaStreamSourceErrorStatus.DecodeError);
+                            deferral.Complete();
+                            return;
+                        }
+                        else
+                            metadataPos += sampleLength;
+                    }
+                    catch (Exception) { }
                 }
 
-                request.Sample = sample;
+                if (sample != null)
+                    request.Sample = sample;
 
-                request.ReportSampleProgress(100);
+                //request.ReportSampleProgress(100);
             }
             catch (Exception)
             {
@@ -319,7 +503,8 @@ namespace UWPShoutcastMSS.Streaming
 
                     var metadata = socketReader.ReadString((uint)metaDataInfo);
 
-                    ParseSongMetadata(metadata);
+                    if (ShouldGetMetadata)
+                        ParseSongMetadata(metadata);
                 }
 
                 byteOffset = 0;
@@ -358,7 +543,7 @@ namespace UWPShoutcastMSS.Streaming
 
             if (MetadataChanged != null)
             {
-                MetadataChanged(this, new ShoutcastMediaSourceManagerMetadataChangedEventArgs()
+                MetadataChanged(this, new ShoutcastMediaSourceStreamMetadataChangedEventArgs()
                 {
                     Title = track,
                     Artist = artist
@@ -366,7 +551,7 @@ namespace UWPShoutcastMSS.Streaming
             }
         }
 
-        private async Task<MediaStreamSample> ParseMP3SampleAsync(bool partial = false, byte[] partialBytes = null)
+        private async Task<Tuple<MediaStreamSample, uint>> ParseMP3SampleAsync(bool partial = false, byte[] partialBytes = null)
         {
             //http://www.mpgedit.org/mpgedit/mpeg_format/MP3Format.html
 
@@ -384,18 +569,38 @@ namespace UWPShoutcastMSS.Streaming
 
             IBuffer buffer = null;
             MediaStreamSample sample = null;
+            uint sampleLength = 0;
 
             if (partial)
             {
                 buffer = partialBytes.AsBuffer();
-                byteOffset += mp3_sampleSize - (ulong)partialBytes.Length;
+                sampleLength = mp3_sampleSize - (uint)partialBytes.Length;
+                byteOffset += sampleLength;
             }
             else
             {
-                await socketReader.LoadAsync(mp3_sampleSize);
-                buffer = socketReader.ReadBuffer(mp3_sampleSize);
+                var read = await socketReader.LoadAsync(mp3_sampleSize);
 
-                byteOffset += mp3_sampleSize;
+                if (read == 0)
+                {
+                    Disconnect();
+                    MediaStreamSource.NotifyError(MediaStreamSourceErrorStatus.ConnectionToServerLost);
+                    return new Tuple<MediaStreamSample, uint>(null, 0);
+                }
+                else if (read < mp3_sampleSize)
+                {
+                    buffer = socketReader.ReadBuffer(read);
+
+                    byteOffset += mp3_sampleSize;
+                }
+                else
+                {
+                    buffer = socketReader.ReadBuffer(mp3_sampleSize);
+
+                    byteOffset += mp3_sampleSize;
+                }
+
+                sampleLength = mp3_sampleSize;
             }
 
             sample = MediaStreamSample.CreateFromBuffer(buffer, timeOffSet);
@@ -405,21 +610,23 @@ namespace UWPShoutcastMSS.Streaming
             timeOffSet = timeOffSet.Add(mp3_sampleDuration);
 
 
-            return sample;
+            return new Tuple<MediaStreamSample, uint>(sample, sampleLength);
 
             //return null;
         }
 
-        private async Task<MediaStreamSample> ParseAACSampleAsync(bool partial = false, byte[] partialBytes = null)
+        private async Task<Tuple<MediaStreamSample, uint>> ParseAACSampleAsync(bool partial = false, byte[] partialBytes = null)
         {
-            
+
             IBuffer buffer = null;
             MediaStreamSample sample = null;
+            uint sampleLength = 0;
 
             if (partial)
             {
                 buffer = partialBytes.AsBuffer();
-                byteOffset += aac_sampleSize - (ulong)partialBytes.Length;
+                sampleLength = aac_sampleSize - (uint)partialBytes.Length;
+                byteOffset += sampleLength;
             }
             else
             {
@@ -427,6 +634,7 @@ namespace UWPShoutcastMSS.Streaming
                 buffer = socketReader.ReadBuffer(aac_sampleSize);
 
                 byteOffset += aac_sampleSize;
+                sampleLength = aac_sampleSize;
             }
 
             sample = MediaStreamSample.CreateFromBuffer(buffer, timeOffSet);
@@ -436,9 +644,10 @@ namespace UWPShoutcastMSS.Streaming
             timeOffSet = timeOffSet.Add(aac_sampleDuration);
 
 
-            return sample;
+            return new Tuple<MediaStreamSample, uint>(sample, sampleLength);
         }
 
-        public event EventHandler<ShoutcastMediaSourceManagerMetadataChangedEventArgs> MetadataChanged;
+        public event EventHandler StationInfoChanged;
+        public event EventHandler<ShoutcastMediaSourceStreamMetadataChangedEventArgs> MetadataChanged;
     }
 }

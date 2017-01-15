@@ -6,14 +6,14 @@ using System.Threading.Tasks;
 
 namespace UWPShoutcastMSS.Streaming
 {
-    public class ShoutcastMediaSourceManagerMetadataChangedEventArgs: EventArgs
+    public class ShoutcastMediaSourceStreamMetadataChangedEventArgs : EventArgs
     {
-        public ShoutcastMediaSourceManagerMetadataChangedEventArgs()
+        public ShoutcastMediaSourceStreamMetadataChangedEventArgs()
         {
 
         }
 
-        public ShoutcastMediaSourceManagerMetadataChangedEventArgs(string track, string artist)
+        public ShoutcastMediaSourceStreamMetadataChangedEventArgs(string track, string artist)
         {
             Artist = artist;
             Title = track;
