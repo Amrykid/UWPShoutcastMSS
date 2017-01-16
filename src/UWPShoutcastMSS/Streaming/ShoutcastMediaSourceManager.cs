@@ -127,25 +127,6 @@ namespace UWPShoutcastMSS.Streaming
 
             AudioEncodingProperties obtainedProperties = await GetEncodingPropertiesAsync();
 
-            //switch (contentType)
-            //{
-            //    case StreamAudioFormat.MP3:
-            //        {
-            //            obtainedProperties = AudioEncodingProperties.CreateMp3(sampleRate, channelCount, (uint)bitRate);
-            //        }
-            //        break;
-            //    case StreamAudioFormat.AAC:
-            //        {
-            //            obtainedProperties = AudioEncodingProperties.CreateAac(sampleRate, channelCount, (uint)bitRate);
-            //        }
-            //        break;
-            //    case StreamAudioFormat.AAC_ADTS:
-            //        {
-            //            obtainedProperties = AudioEncodingProperties.CreateAacAdts(sampleRate, channelCount, (uint)bitRate);
-            //        }
-            //        break;
-            //}
-
             MediaStreamSource = new Windows.Media.Core.MediaStreamSource(new AudioStreamDescriptor(obtainedProperties));
 
             MediaStreamSource.SampleRequested += MediaStreamSource_SampleRequested;
@@ -301,20 +282,13 @@ namespace UWPShoutcastMSS.Streaming
 
         private void MediaStreamSource_Closed(MediaStreamSource sender, MediaStreamSourceClosedEventArgs args)
         {
-            MediaStreamSource.Starting -= MediaStreamSource_Starting;
-            MediaStreamSource.Closed -= MediaStreamSource_Closed;
-            MediaStreamSource.SampleRequested -= MediaStreamSource_SampleRequested;
-
-            try
-            {
-                Disconnect();
-            }
-            catch (Exception) { }
+            //todo fire an event?
+            Disconnect();
         }
 
         private void MediaStreamSource_Starting(MediaStreamSource sender, MediaStreamSourceStartingEventArgs args)
         {
-
+            //todo fire an event?
         }
 
         private async Task EstablishConnectionAsync()
@@ -361,7 +335,7 @@ namespace UWPShoutcastMSS.Streaming
 
             socketWriter.WriteString("Host: " + streamUrl.Host + Environment.NewLine);
             socketWriter.WriteString("Connection: Keep-Alive" + Environment.NewLine);
-            socketWriter.WriteString("User-Agent: " + (UserAgent ?? "Shoutcast Player (http://github.com/Amrykid/UWPShoutcastMSS") + Environment.NewLine);
+            socketWriter.WriteString("User-Agent: " + (UserAgent ?? "Shoutcast Player (http://github.com/Amrykid/UWPShoutcastMSS)") + Environment.NewLine);
             socketWriter.WriteString(Environment.NewLine);
             await socketWriter.StoreAsync();
             await socketWriter.FlushAsync();
@@ -536,7 +510,6 @@ namespace UWPShoutcastMSS.Streaming
                                 Tuple<MediaStreamSample, uint> result = await ParseMP3SampleAsync();
                                 sample = result.Item1;
                                 sampleLength = result.Item2;
-                                //await MediaStreamSample.CreateFromStreamAsync(socket.InputStream, bitRate, new TimeSpan(0, 0, 1));
                             }
                             break;
                         case StreamAudioFormat.AAC_ADTS:
@@ -551,7 +524,7 @@ namespace UWPShoutcastMSS.Streaming
 
                     try
                     {
-                        if (sample == null || sampleLength == 0) //bug: on RELEASE builds, sample.Buffer causes the app to die due to a possible .NET Native bug
+                        if (sample == null || sampleLength == 0) //OLD bug: on RELEASE builds, sample.Buffer causes the app to die due to a possible .NET Native bug
                         {
                             MediaStreamSource.NotifyError(MediaStreamSourceErrorStatus.DecodeError);
                             deferral.Complete();
@@ -645,18 +618,6 @@ namespace UWPShoutcastMSS.Streaming
         {
             //http://www.mpgedit.org/mpgedit/mpeg_format/MP3Format.html
 
-
-            //uint frameHeaderCount = 32;
-            //await socketReader.LoadAsync(frameHeaderCount);
-
-            //byte[] frameHeader = new byte[4];
-            //socketReader.ReadBytes(frameHeader);
-            //BitArray frameHeaderArray = new BitArray(frameHeader);
-
-            //string audioVersionID = frameHeader[1].GetBit( <<  + char.ConvertFromUtf32(frameHeaderArray.Get(19));
-
-            //var db = audioVersionID;
-
             IBuffer buffer = null;
             MediaStreamSample sample = null;
             uint sampleLength = 0;
@@ -701,13 +662,10 @@ namespace UWPShoutcastMSS.Streaming
 
 
             return new Tuple<MediaStreamSample, uint>(sample, sampleLength);
-
-            //return null;
         }
 
         private async Task<Tuple<MediaStreamSample, uint>> ParseAACSampleAsync(bool partial = false, byte[] partialBytes = null)
         {
-
             IBuffer buffer = null;
             MediaStreamSample sample = null;
             uint sampleLength = 0;
