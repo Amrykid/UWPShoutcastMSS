@@ -11,6 +11,7 @@ using Windows.Networking.Sockets;
 using Windows.Storage.Streams;
 using System.Runtime.InteropServices.WindowsRuntime;
 using Windows.Networking.Connectivity;
+using UWPShoutcastMSS.Parsers.Audio;
 
 namespace UWPShoutcastMSS.Streaming
 {
@@ -78,11 +79,11 @@ namespace UWPShoutcastMSS.Streaming
         TimeSpan mp3_sampleDuration = new TimeSpan(0, 0, 0, 0, 70);
         #endregion
 
-        //TODO
-        UInt32 aac_sampleSize = 1024;
-        TimeSpan aac_sampleDuration = new TimeSpan(0, 0, 0, 0, 70);
+        //AAC_ADTS := https://wiki.multimedia.cx/index.php/ADTS
+        UInt32 aac_adts_sampleSize = 1024;
+        TimeSpan aac_adts_sampleDuration = new TimeSpan(0, 0, 0, 0, 70);
 
-        public ShoutcastMediaSourceStream(Uri url, ShoutcastServerType stationServerType = ShoutcastServerType.Shoutcast)
+        public ShoutcastMediaSourceStream(Uri url, ShoutcastServerType stationServerType = ShoutcastServerType.Shoutcast, string relativePath = ";", bool getMetadata = true)
         {
             StationInfo = new ShoutcastStationInfo();
 
@@ -91,6 +92,10 @@ namespace UWPShoutcastMSS.Streaming
             serverType = stationServerType;
 
             socket = new StreamSocket();
+
+            ShouldGetMetadata = getMetadata;
+
+            this.relativePath = relativePath;
         }
 
 
@@ -112,38 +117,34 @@ namespace UWPShoutcastMSS.Streaming
 
             socket = new StreamSocket();
 
-            await ConnectAsync(sampleRate, channelCount, relativePath, ShouldGetMetadata);
+            await ConnectAsync();
         }
-        public async Task<MediaStreamSource> ConnectAsync(uint sampleRate = 44100, uint channelCount = 2, string relativePath = ";", bool getMetadata = true)
+        public async Task<MediaStreamSource> ConnectAsync()
         {
-            ShouldGetMetadata = getMetadata;
-
-            this.relativePath = relativePath;
-
             await EstablishConnectionAsync();
 
             if (connected == false) return null;
 
-            AudioEncodingProperties obtainedProperties = null; //await GetEncodingPropertiesAsync();
+            AudioEncodingProperties obtainedProperties = await GetEncodingPropertiesAsync();
 
-            switch (contentType)
-            {
-                case StreamAudioFormat.MP3:
-                    {
-                        obtainedProperties = AudioEncodingProperties.CreateMp3(sampleRate, channelCount, (uint)bitRate);
-                    }
-                    break;
-                case StreamAudioFormat.AAC:
-                    {
-                        obtainedProperties = AudioEncodingProperties.CreateAac(sampleRate, channelCount, (uint)bitRate);
-                    }
-                    break;
-                case StreamAudioFormat.AAC_ADTS:
-                    {
-                        obtainedProperties = AudioEncodingProperties.CreateAacAdts(sampleRate, channelCount, (uint)bitRate);
-                    }
-                    break;
-            }
+            //switch (contentType)
+            //{
+            //    case StreamAudioFormat.MP3:
+            //        {
+            //            obtainedProperties = AudioEncodingProperties.CreateMp3(sampleRate, channelCount, (uint)bitRate);
+            //        }
+            //        break;
+            //    case StreamAudioFormat.AAC:
+            //        {
+            //            obtainedProperties = AudioEncodingProperties.CreateAac(sampleRate, channelCount, (uint)bitRate);
+            //        }
+            //        break;
+            //    case StreamAudioFormat.AAC_ADTS:
+            //        {
+            //            obtainedProperties = AudioEncodingProperties.CreateAacAdts(sampleRate, channelCount, (uint)bitRate);
+            //        }
+            //        break;
+            //}
 
             MediaStreamSource = new Windows.Media.Core.MediaStreamSource(new AudioStreamDescriptor(obtainedProperties));
 
@@ -153,9 +154,6 @@ namespace UWPShoutcastMSS.Streaming
             MediaStreamSource.Closed += MediaStreamSource_Closed;
 
             connected = true;
-            this.relativePath = relativePath;
-            this.sampleRate = sampleRate;
-            this.channelCount = channelCount;
 
             return MediaStreamSource;
 
@@ -168,50 +166,130 @@ namespace UWPShoutcastMSS.Streaming
             AudioEncodingProperties obtainedProperties = null;
             IBuffer buffer = null;
             int sampleRate = 0;
+            int channelCount = 0;
 
             switch (contentType)
             {
                 case StreamAudioFormat.MP3:
                     {
-                        await socketReader.LoadAsync(mp3_sampleSize);
-                        buffer = socketReader.ReadBuffer(mp3_sampleSize);
-                        byteOffset += mp3_sampleSize;
+                        //load the first byte
+                        await socketReader.LoadAsync(1);
+                        byte lastByte = socketReader.ReadByte();
+                        byteOffset += 1;
+                        metadataPos += 1;
 
-                        //todo find the sync bits for mp3 because it doesn't seem like we're receiving a full frame initially.
+                        while (true) //wait for frame sync
+                        {
+                            await socketReader.LoadAsync(1);
+                            var curByte = socketReader.ReadByte();
 
-                        byte[] bytesHeader = buffer.ToArray(0, 5); //first four bytes
+                            if (MP3Parser.IsFrameSync(lastByte, curByte)) //check if we're at the frame sync. if we are, parse some of the audio data
+                            {
+                                byteOffset += 1;
+                                metadataPos += 1;
 
-                        #region Modified version of http://sahanganepola.blogspot.com/2010/07/c-class-to-get-mp3-header-details.html
-                        //I don't like copying code without understanding it but this is a case where i dont fully understand everything going on.
-                        //I need to read up on bitmasking and such.
+                                byte[] header = new byte[MP3Parser.HeaderLength];
+                                header[0] = lastByte;
+                                header[1] = curByte;
 
-                        //EDIT FROM FUTURE: Found this -> http://www.cprogramming.com/tutorial/bitwise_operators.html
+                                await socketReader.LoadAsync(2);
+                                header[2] = socketReader.ReadByte();
+                                header[3] = socketReader.ReadByte();
+                                byteOffset += 2;
+                                metadataPos += 2;
 
-                        var bithdr = (ulong)(((bytesHeader[0] & 255) << 24) | ((bytesHeader[1] & 255) << 16) | ((bytesHeader[2] & 255) << 8) | ((bytesHeader[3] & 255)));
+                                sampleRate = MP3Parser.GetSampleRate(header);
 
-                        var bitrateIndex = (int)((bithdr >> 12) & 15);
-                        var versionIndex = (int)((bithdr >> 19) & 3);
+                                channelCount = MP3Parser.GetChannelCount(header);
 
-                        var frequencyIndex = (int)((bithdr >> 10) & 3); //sampleRate
+                                bitRate = (uint)MP3Parser.GetBitRate(header);
 
-                        int[,] frequencyTable =    {
-                             {32000, 16000,  8000}, // MPEG 2.5
-                             {    0,     0,     0}, // reserved
-                             {22050, 24000, 16000}, // MPEG 2
-                             {44100, 48000, 32000}  // MPEG 1
-                         };
-                        #endregion
+                                if (bitRate == 0) throw new Exception("Unknown bitrate.");
+                                break;
+                            }
+                            else
+                            {
+                                byteOffset += 1;
+                                metadataPos += 1;
+                                lastByte = curByte;
+                            }
+                        }
 
-                        sampleRate = frequencyTable[versionIndex, frequencyIndex];
+                        //skip the entire first frame/sample to get back on track
+                        await socketReader.LoadAsync(mp3_sampleSize - MP3Parser.HeaderLength);
+                        buffer = socketReader.ReadBuffer(mp3_sampleSize - MP3Parser.HeaderLength);
+                        byteOffset += mp3_sampleSize - MP3Parser.HeaderLength;
 
-                        obtainedProperties = AudioEncodingProperties.CreateMp3((uint)sampleRate, 2, bitRate);
+
+                        obtainedProperties = AudioEncodingProperties.CreateMp3((uint)sampleRate, (uint)channelCount, bitRate);
+
                         break;
                     }
                 case StreamAudioFormat.AAC:
                     {
-                        obtainedProperties = AudioEncodingProperties.CreateAac(0, 2, 0);
-                        throw new Exception();
+                        //obtainedProperties = AudioEncodingProperties.CreateAac(0, 2, 0);
+                        throw new Exception("Not supported.");
                     }
+                case StreamAudioFormat.AAC_ADTS:
+                    {
+                        //load the first byte
+                        await socketReader.LoadAsync(1);
+                        byte lastByte = socketReader.ReadByte();
+                        byteOffset += 1;
+                        metadataPos += 1;
+
+                        while (true) //wait for frame sync
+                        {
+                            await socketReader.LoadAsync(1);
+                            var curByte = socketReader.ReadByte();
+
+                            if (AAC_ADTSParser.IsFrameSync(lastByte, curByte)) //check if we're at the frame sync. if we are, parse some of the audio data
+                            {
+                                byteOffset += 1;
+                                metadataPos += 1;
+
+                                byte[] header = new byte[AAC_ADTSParser.HeaderLength];
+                                header[0] = lastByte;
+                                header[1] = curByte;
+
+                                await socketReader.LoadAsync(5);
+                                header[2] = socketReader.ReadByte();
+                                header[3] = socketReader.ReadByte();
+                                header[4] = socketReader.ReadByte();
+                                header[5] = socketReader.ReadByte();
+                                header[6] = socketReader.ReadByte();
+                                byteOffset += 5;
+                                metadataPos += 5;
+
+                                //todo deal with CRC
+
+                                sampleRate = AAC_ADTSParser.GetSampleRate(header);
+
+                                channelCount = AAC_ADTSParser.GetChannelCount(header);
+
+                                //bitrate gets sent by the server.
+                                //bitRate = (uint)AAC_ADTSParser.GetBitRate(header);
+
+                                if (bitRate == 0) throw new Exception("Unknown bitrate.");
+
+                                //skip the entire first frame/sample to get back on track
+                                await socketReader.LoadAsync(aac_adts_sampleSize - AAC_ADTSParser.HeaderLength);
+                                buffer = socketReader.ReadBuffer(aac_adts_sampleSize - AAC_ADTSParser.HeaderLength);
+                                byteOffset += aac_adts_sampleSize - AAC_ADTSParser.HeaderLength;
+
+                                obtainedProperties = AudioEncodingProperties.CreateAacAdts((uint)sampleRate, (uint)channelCount, bitRate);
+
+                                break;
+                            }
+                            else
+                            {
+                                byteOffset += 1;
+                                metadataPos += 1;
+                                lastByte = curByte;
+                            }
+                        }
+                    }
+                    break;
                 default:
                     break;
             }
@@ -406,7 +484,7 @@ namespace UWPShoutcastMSS.Streaming
                 //request.ReportSampleProgress(25);
 
                 //if metadataPos is less than mp3_sampleSize away from metadataInt
-                if (metadataInt - metadataPos <= (contentType == StreamAudioFormat.MP3 ? mp3_sampleSize : aac_sampleSize) && metadataInt - metadataPos > 0)
+                if (metadataInt - metadataPos <= (contentType == StreamAudioFormat.MP3 ? mp3_sampleSize : aac_adts_sampleSize) && metadataInt - metadataPos > 0)
                 {
                     //parse part of the frame.
 
@@ -637,23 +715,23 @@ namespace UWPShoutcastMSS.Streaming
             if (partial)
             {
                 buffer = partialBytes.AsBuffer();
-                sampleLength = aac_sampleSize - (uint)partialBytes.Length;
+                sampleLength = aac_adts_sampleSize - (uint)partialBytes.Length;
                 byteOffset += sampleLength;
             }
             else
             {
-                await socketReader.LoadAsync(aac_sampleSize);
-                buffer = socketReader.ReadBuffer(aac_sampleSize);
+                await socketReader.LoadAsync(aac_adts_sampleSize);
+                buffer = socketReader.ReadBuffer(aac_adts_sampleSize);
 
-                byteOffset += aac_sampleSize;
-                sampleLength = aac_sampleSize;
+                byteOffset += aac_adts_sampleSize;
+                sampleLength = aac_adts_sampleSize;
             }
 
             sample = MediaStreamSample.CreateFromBuffer(buffer, timeOffSet);
-            sample.Duration = aac_sampleDuration;
+            sample.Duration = aac_adts_sampleDuration;
             sample.KeyFrame = true;
 
-            timeOffSet = timeOffSet.Add(aac_sampleDuration);
+            timeOffSet = timeOffSet.Add(aac_adts_sampleDuration);
 
 
             return new Tuple<MediaStreamSample, uint>(sample, sampleLength);
