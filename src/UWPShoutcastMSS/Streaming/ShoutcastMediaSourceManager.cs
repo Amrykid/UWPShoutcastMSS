@@ -333,7 +333,7 @@ namespace UWPShoutcastMSS.Streaming
             if (ShouldGetMetadata)
                 socketWriter.WriteString("Icy-MetaData: 1" + Environment.NewLine);
 
-            socketWriter.WriteString("Host: " + streamUrl.Host + Environment.NewLine);
+            socketWriter.WriteString("Host: " + streamUrl.Host + (streamUrl.Port != 80 ? ":" + streamUrl.Port : "") + Environment.NewLine);
             socketWriter.WriteString("Connection: Keep-Alive" + Environment.NewLine);
             socketWriter.WriteString("User-Agent: " + (UserAgent ?? "Shoutcast Player (http://github.com/Amrykid/UWPShoutcastMSS)") + Environment.NewLine);
             socketWriter.WriteString(Environment.NewLine);
