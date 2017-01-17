@@ -166,160 +166,178 @@ namespace UWPShoutcastMSS.Streaming
                         x.Substring(x.IndexOf("=") + 1))).ToArray();
 
                 //grab each value that we need.
-                bitRate = uint.Parse(propertiesAndValues.First(x => x.Key == "ice-bitrate" || x.Key == "bitrate").Value);
-                channelCount = int.Parse(propertiesAndValues.First(x => x.Key == "ice-channels" || x.Key == "channels").Value);
-                sampleRate = int.Parse(propertiesAndValues.First(x => x.Key == "ice-samplerate" || x.Key == "samplerate").Value);
 
-                //now just create the appropriate AudioEncodingProperties object.
-                switch (contentType)
+                if (bitRate == 0) //usually this is sent in the regular headers. grab it if it isn't.
+                    bitRate = uint.Parse(propertiesAndValues.First(x => x.Key == "ice-bitrate" || x.Key == "bitrate").Value);
+
+
+                if (propertiesAndValues.Any(x => x.Key == "ice-channels" || x.Key == "channels") && propertiesAndValues.Any(x => x.Key == "ice-samplerate" || x.Key == "samplerate"))
                 {
-                    case StreamAudioFormat.MP3:
-                        return AudioEncodingProperties.CreateMp3((uint)sampleRate, (uint)channelCount, bitRate);
-                    case StreamAudioFormat.AAC_ADTS:
-                        return AudioEncodingProperties.CreateAacAdts((uint)sampleRate, (uint)channelCount, bitRate);
+                    channelCount = int.Parse(propertiesAndValues.First(x => x.Key == "ice-channels" || x.Key == "channels").Value);
+                    sampleRate = int.Parse(propertiesAndValues.First(x => x.Key == "ice-samplerate" || x.Key == "samplerate").Value);
+
+                    //now just create the appropriate AudioEncodingProperties object.
+                    switch (contentType)
+                    {
+                        case StreamAudioFormat.MP3:
+                            return AudioEncodingProperties.CreateMp3((uint)sampleRate, (uint)channelCount, bitRate);
+                        case StreamAudioFormat.AAC_ADTS:
+                            return AudioEncodingProperties.CreateAacAdts((uint)sampleRate, (uint)channelCount, bitRate);
+                    }
+                }
+                else
+                {
+                    //something is missing from audio-info so we need to fallback.
+
+                    return await ParseEncodingFromMediaAsync();
                 }
             }
             else
             {
-                //grab the first frame and strip it for information
-
-                AudioEncodingProperties obtainedProperties = null;
-                IBuffer buffer = null;
-                int sampleRate = 0;
-                int channelCount = 0;
-
-                switch (contentType)
-                {
-                    case StreamAudioFormat.MP3:
-                        {
-                            //load the first byte
-                            await socketReader.LoadAsync(1);
-                            byte lastByte = socketReader.ReadByte();
-                            byteOffset += 1;
-                            metadataPos += 1;
-
-                            while (true) //wait for frame sync
-                            {
-                                await socketReader.LoadAsync(1);
-                                var curByte = socketReader.ReadByte();
-
-                                if (MP3Parser.IsFrameSync(lastByte, curByte)) //check if we're at the frame sync. if we are, parse some of the audio data
-                                {
-                                    byteOffset += 1;
-                                    metadataPos += 1;
-
-                                    byte[] header = new byte[MP3Parser.HeaderLength];
-                                    header[0] = lastByte;
-                                    header[1] = curByte;
-
-                                    await socketReader.LoadAsync(2);
-                                    header[2] = socketReader.ReadByte();
-                                    header[3] = socketReader.ReadByte();
-                                    byteOffset += 2;
-                                    metadataPos += 2;
-
-                                    sampleRate = MP3Parser.GetSampleRate(header);
-
-                                    channelCount = MP3Parser.GetChannelCount(header);
-
-                                    bitRate = (uint)MP3Parser.GetBitRate(header);
-
-                                    if (bitRate == 0) throw new Exception("Unknown bitrate.");
-                                    break;
-                                }
-                                else
-                                {
-                                    byteOffset += 1;
-                                    metadataPos += 1;
-                                    lastByte = curByte;
-                                }
-                            }
-
-                            //skip the entire first frame/sample to get back on track
-                            await socketReader.LoadAsync(mp3_sampleSize - MP3Parser.HeaderLength);
-                            buffer = socketReader.ReadBuffer(mp3_sampleSize - MP3Parser.HeaderLength);
-                            byteOffset += mp3_sampleSize - MP3Parser.HeaderLength;
-
-
-                            obtainedProperties = AudioEncodingProperties.CreateMp3((uint)sampleRate, (uint)channelCount, bitRate);
-
-                            break;
-                        }
-                    case StreamAudioFormat.AAC:
-                        {
-                            //obtainedProperties = AudioEncodingProperties.CreateAac(0, 2, 0);
-                            throw new Exception("Not supported.");
-                        }
-                    case StreamAudioFormat.AAC_ADTS:
-                        {
-                            //load the first byte
-                            await socketReader.LoadAsync(1);
-                            byte lastByte = socketReader.ReadByte();
-                            byteOffset += 1;
-                            metadataPos += 1;
-
-                            while (true) //wait for frame sync
-                            {
-                                await socketReader.LoadAsync(1);
-                                var curByte = socketReader.ReadByte();
-
-                                if (AAC_ADTSParser.IsFrameSync(lastByte, curByte)) //check if we're at the frame sync. if we are, parse some of the audio data
-                                {
-                                    byteOffset += 1;
-                                    metadataPos += 1;
-
-                                    byte[] header = new byte[AAC_ADTSParser.HeaderLength];
-                                    header[0] = lastByte;
-                                    header[1] = curByte;
-
-                                    await socketReader.LoadAsync(5);
-                                    header[2] = socketReader.ReadByte();
-                                    header[3] = socketReader.ReadByte();
-                                    header[4] = socketReader.ReadByte();
-                                    header[5] = socketReader.ReadByte();
-                                    header[6] = socketReader.ReadByte();
-                                    byteOffset += 5;
-                                    metadataPos += 5;
-
-                                    //todo deal with CRC
-
-                                    sampleRate = AAC_ADTSParser.GetSampleRate(header);
-
-                                    channelCount = AAC_ADTSParser.GetChannelCount(header);
-
-                                    //bitrate gets sent by the server.
-                                    //bitRate = (uint)AAC_ADTSParser.GetBitRate(header);
-
-                                    if (bitRate == 0) throw new Exception("Unknown bitrate.");
-
-                                    //skip the entire first frame/sample to get back on track
-                                    await socketReader.LoadAsync(aac_adts_sampleSize - AAC_ADTSParser.HeaderLength);
-                                    buffer = socketReader.ReadBuffer(aac_adts_sampleSize - AAC_ADTSParser.HeaderLength);
-                                    byteOffset += aac_adts_sampleSize - AAC_ADTSParser.HeaderLength;
-
-                                    obtainedProperties = AudioEncodingProperties.CreateAacAdts((uint)sampleRate, (uint)channelCount, bitRate);
-
-                                    break;
-                                }
-                                else
-                                {
-                                    byteOffset += 1;
-                                    metadataPos += 1;
-                                    lastByte = curByte;
-                                }
-                            }
-                        }
-                        break;
-                    default:
-                        break;
-                }
-
-                metadataPos += buffer.Length; //very important or it will throw everything off!
-
-                return obtainedProperties;
+                return await ParseEncodingFromMediaAsync();
             }
 
             return null;
+        }
+
+        private async Task<AudioEncodingProperties> ParseEncodingFromMediaAsync()
+        {
+            //grab the first frame and strip it for information
+
+            AudioEncodingProperties obtainedProperties = null;
+            IBuffer buffer = null;
+            int sampleRate = 0;
+            int channelCount = 0;
+
+            switch (contentType)
+            {
+                case StreamAudioFormat.MP3:
+                    {
+                        //load the first byte
+                        await socketReader.LoadAsync(1);
+                        byte lastByte = socketReader.ReadByte();
+                        byteOffset += 1;
+                        metadataPos += 1;
+
+                        while (true) //wait for frame sync
+                        {
+                            await socketReader.LoadAsync(1);
+                            var curByte = socketReader.ReadByte();
+
+                            if (MP3Parser.IsFrameSync(lastByte, curByte)) //check if we're at the frame sync. if we are, parse some of the audio data
+                            {
+                                byteOffset += 1;
+                                metadataPos += 1;
+
+                                byte[] header = new byte[MP3Parser.HeaderLength];
+                                header[0] = lastByte;
+                                header[1] = curByte;
+
+                                await socketReader.LoadAsync(2);
+                                header[2] = socketReader.ReadByte();
+                                header[3] = socketReader.ReadByte();
+                                byteOffset += 2;
+                                metadataPos += 2;
+
+                                sampleRate = MP3Parser.GetSampleRate(header);
+
+                                channelCount = MP3Parser.GetChannelCount(header);
+
+                                bitRate = (uint)MP3Parser.GetBitRate(header);
+
+                                if (bitRate == 0) throw new Exception("Unknown bitrate.");
+                                break;
+                            }
+                            else
+                            {
+                                byteOffset += 1;
+                                metadataPos += 1;
+                                lastByte = curByte;
+                            }
+                        }
+
+                        //skip the entire first frame/sample to get back on track
+                        await socketReader.LoadAsync(mp3_sampleSize - MP3Parser.HeaderLength);
+                        buffer = socketReader.ReadBuffer(mp3_sampleSize - MP3Parser.HeaderLength);
+                        byteOffset += mp3_sampleSize - MP3Parser.HeaderLength;
+
+
+                        obtainedProperties = AudioEncodingProperties.CreateMp3((uint)sampleRate, (uint)channelCount, bitRate);
+
+                        break;
+                    }
+                case StreamAudioFormat.AAC:
+                    {
+                        //obtainedProperties = AudioEncodingProperties.CreateAac(0, 2, 0);
+                        throw new Exception("Not supported.");
+                    }
+                case StreamAudioFormat.AAC_ADTS:
+                    {
+                        //load the first byte
+                        await socketReader.LoadAsync(1);
+                        byte lastByte = socketReader.ReadByte();
+                        byteOffset += 1;
+                        metadataPos += 1;
+
+                        while (true) //wait for frame sync
+                        {
+                            await socketReader.LoadAsync(1);
+                            var curByte = socketReader.ReadByte();
+
+                            if (AAC_ADTSParser.IsFrameSync(lastByte, curByte)) //check if we're at the frame sync. if we are, parse some of the audio data
+                            {
+                                byteOffset += 1;
+                                metadataPos += 1;
+
+                                byte[] header = new byte[AAC_ADTSParser.HeaderLength];
+                                header[0] = lastByte;
+                                header[1] = curByte;
+
+                                await socketReader.LoadAsync(5);
+                                header[2] = socketReader.ReadByte();
+                                header[3] = socketReader.ReadByte();
+                                header[4] = socketReader.ReadByte();
+                                header[5] = socketReader.ReadByte();
+                                header[6] = socketReader.ReadByte();
+                                byteOffset += 5;
+                                metadataPos += 5;
+
+                                //todo deal with CRC
+
+                                sampleRate = AAC_ADTSParser.GetSampleRate(header);
+
+                                channelCount = AAC_ADTSParser.GetChannelCount(header);
+
+                                //bitrate gets sent by the server.
+                                //bitRate = (uint)AAC_ADTSParser.GetBitRate(header);
+
+                                if (bitRate == 0) throw new Exception("Unknown bitrate.");
+
+                                //skip the entire first frame/sample to get back on track
+                                await socketReader.LoadAsync(aac_adts_sampleSize - AAC_ADTSParser.HeaderLength);
+                                buffer = socketReader.ReadBuffer(aac_adts_sampleSize - AAC_ADTSParser.HeaderLength);
+                                byteOffset += aac_adts_sampleSize - AAC_ADTSParser.HeaderLength;
+
+                                obtainedProperties = AudioEncodingProperties.CreateAacAdts((uint)sampleRate, (uint)channelCount, bitRate);
+
+                                break;
+                            }
+                            else
+                            {
+                                byteOffset += 1;
+                                metadataPos += 1;
+                                lastByte = curByte;
+                            }
+                        }
+                    }
+                    break;
+                default:
+                    break;
+            }
+
+            metadataPos += buffer.Length; //very important or it will throw everything off!
+
+            return obtainedProperties;
         }
 
         private void MediaStreamSource_Closed(MediaStreamSource sender, MediaStreamSourceClosedEventArgs args)
