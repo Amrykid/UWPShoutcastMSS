@@ -291,7 +291,7 @@ namespace UWPShoutcastMSS.Streaming
             //todo fire an event?
         }
 
-        private async Task EstablishConnectionAsync()
+        private async Task<Tuple<bool, KeyValuePair<string, string>[]>> EstablishConnectionAsync()
         {
             //http://www.smackfu.com/stuff/programming/shoutcast.html
             try
@@ -312,7 +312,7 @@ namespace UWPShoutcastMSS.Streaming
                 else
                     throw new Exception("Connection Error", ex);
 
-                return;
+                return null;
             }
 
             //todo figure out how to resolve http requests better to get rid of this hack.
@@ -347,43 +347,52 @@ namespace UWPShoutcastMSS.Streaming
                 response += socketReader.ReadString(1);
             }
 
-            if (response.StartsWith("HTTP/1.0 302") || response.StartsWith("HTTP/1.1 302"))
+            if (response.StartsWith("HTTP/1.0 200 OK") || response.StartsWith("HTTP/1.1 200 OK") || response.StartsWith("ICY 200"))
             {
-                socketReader.Dispose();
-                socketWriter.Dispose();
-                socket.Dispose();
+                var headers = ParseResponse(response);
 
-                var parsedResponse = ParseHttpResponseToKeyPairArray(response.Split(new string[] { "\r\n" }, StringSplitOptions.None).Skip(1).ToArray());
-
-                socket = new StreamSocket();
-                streamUrl = new Uri(parsedResponse.First(x => x.Key.ToLower() == "location").Value);
-
-                await EstablishConnectionAsync();
-
-                return;
+                return new Tuple<bool, KeyValuePair<string, string>[]>(connected, headers);
             }
-            else if (response.StartsWith("HTTP/1.0 404"))
+            else
             {
-                throw new Exception("Station is unavailable.");
-            }
-            else if (response.StartsWith("ICY 401")) //ICY 401 Service Unavailable
-            {
-                if (MediaStreamSource != null)
-                    MediaStreamSource.NotifyError(MediaStreamSourceErrorStatus.FailedToConnectToServer);
-                else
-                    throw new Exception("Station is unavailable at this time. Maybe they're down for maintainence?");
+                //wasn't successful. handle each case accordingly.
 
-                return;
-            }
-            else if (response.StartsWith("HTTP/1.1 503")) //HTTP/1.1 503 Server limit reached
-            {
-                throw new Exception("Station is unavailable at this time. The maximum amount of listeners has been reached.");
+                if (response.StartsWith("HTTP /1.0 302") || response.StartsWith("HTTP/1.1 302"))
+                {
+                    socketReader.Dispose();
+                    socketWriter.Dispose();
+                    socket.Dispose();
+
+                    var parsedResponse = ParseHttpResponseToKeyPairArray(response.Split(new string[] { "\r\n" }, StringSplitOptions.None).Skip(1).ToArray());
+
+                    socket = new StreamSocket();
+                    streamUrl = new Uri(parsedResponse.First(x => x.Key.ToLower() == "location").Value);
+
+                    return await EstablishConnectionAsync();
+                }
+                else if (response.StartsWith("HTTP/1.0 404"))
+                {
+                    throw new Exception("Station is unavailable.");
+                }
+                else if (response.StartsWith("ICY 401")) //ICY 401 Service Unavailable
+                {
+                    if (MediaStreamSource != null)
+                        MediaStreamSource.NotifyError(MediaStreamSourceErrorStatus.FailedToConnectToServer);
+                    else
+                        throw new Exception("Station is unavailable at this time. Maybe they're down for maintainence?");
+
+                    return new Tuple<bool, KeyValuePair<string, string>[]>(connected, null);
+                }
+                else if (response.StartsWith("HTTP/1.1 503")) //HTTP/1.1 503 Server limit reached
+                {
+                    throw new Exception("Station is unavailable at this time. The maximum amount of listeners has been reached.");
+                }
             }
 
-            ParseResponse(response);
+            return new Tuple<bool, KeyValuePair<string, string>[]>(false, null); //not connected and no headers.
         }
 
-        private void ParseResponse(string response)
+        private KeyValuePair<string, string>[] ParseResponse(string response)
         {
             string[] responseSplitByLine = response.Split(new string[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries);
             KeyValuePair<string, string>[] headers = ParseHttpResponseToKeyPairArray(responseSplitByLine);
@@ -412,6 +421,10 @@ namespace UWPShoutcastMSS.Streaming
                     contentType = StreamAudioFormat.AAC_ADTS;
                     break;
             }
+
+
+
+            return headers;
         }
 
         private static KeyValuePair<string, string>[] ParseHttpResponseToKeyPairArray(string[] responseSplitByLine)
