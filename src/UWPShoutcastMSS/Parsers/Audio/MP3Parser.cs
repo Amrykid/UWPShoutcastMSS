@@ -16,7 +16,7 @@ namespace UWPShoutcastMSS.Parsers.Audio
 
         public static bool IsFrameSync(byte firstByte, byte secondByte)
         {
-            return (firstByte == FrameSync[0] && (secondByte & FrameSync[1]) == (byte)224);
+            return (firstByte == FrameSync[0] && (secondByte & FrameSync[1]) == (byte)224 && secondByte != (byte)255);
         }
 
         public static double GetMPEGAudioVersion(byte[] header)
