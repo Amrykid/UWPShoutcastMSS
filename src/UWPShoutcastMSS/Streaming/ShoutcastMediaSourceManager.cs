@@ -123,6 +123,7 @@ namespace UWPShoutcastMSS.Streaming
         {
             var response = await EstablishConnectionAsync();
 
+            connected = response.Item1;
             if (connected == false) return false;
 
             AudioEncodingProperties obtainedProperties = await GetEncodingPropertiesAsync(response.Item2);
@@ -181,6 +182,7 @@ namespace UWPShoutcastMSS.Streaming
                     {
                         case StreamAudioFormat.MP3:
                             return AudioEncodingProperties.CreateMp3((uint)sampleRate, (uint)channelCount, bitRate);
+                        case StreamAudioFormat.AAC:
                         case StreamAudioFormat.AAC_ADTS:
                             return AudioEncodingProperties.CreateAacAdts((uint)sampleRate, (uint)channelCount, bitRate);
                     }
@@ -360,19 +362,15 @@ namespace UWPShoutcastMSS.Streaming
 
                 socketWriter = new DataWriter(socket.OutputStream);
                 socketReader = new DataReader(socket.InputStream);
-
-                connected = true;
             }
             catch (Exception ex)
             {
-                connected = false;
-
                 if (MediaStreamSource != null)
                     MediaStreamSource.NotifyError(MediaStreamSourceErrorStatus.FailedToConnectToServer);
                 else
                     throw new Exception("Connection Error", ex);
 
-                return null;
+                return new Tuple<bool, KeyValuePair<string, string>[]>(false, null);
             }
 
             //todo figure out how to resolve http requests better to get rid of this hack.
@@ -411,7 +409,7 @@ namespace UWPShoutcastMSS.Streaming
             {
                 var headers = ParseResponse(response);
 
-                return new Tuple<bool, KeyValuePair<string, string>[]>(connected, headers);
+                return new Tuple<bool, KeyValuePair<string, string>[]>(true, headers);
             }
             else
             {
@@ -441,7 +439,7 @@ namespace UWPShoutcastMSS.Streaming
                     else
                         throw new Exception("Station is unavailable at this time. Maybe they're down for maintainence?");
 
-                    return new Tuple<bool, KeyValuePair<string, string>[]>(connected, null);
+                    return new Tuple<bool, KeyValuePair<string, string>[]>(false, null);
                 }
                 else if (response.StartsWith("HTTP/1.1 503")) //HTTP/1.1 503 Server limit reached
                 {
