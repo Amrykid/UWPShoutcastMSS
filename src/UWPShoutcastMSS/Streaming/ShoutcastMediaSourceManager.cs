@@ -119,11 +119,11 @@ namespace UWPShoutcastMSS.Streaming
 
             await ConnectAsync();
         }
-        public async Task<MediaStreamSource> ConnectAsync()
+        public async Task<bool> ConnectAsync()
         {
             var response = await EstablishConnectionAsync();
 
-            if (connected == false) return null;
+            if (connected == false) return false;
 
             AudioEncodingProperties obtainedProperties = await GetEncodingPropertiesAsync(response.Item2);
 
@@ -136,7 +136,7 @@ namespace UWPShoutcastMSS.Streaming
 
             connected = true;
 
-            return MediaStreamSource;
+            return connected;
 
         }
 
