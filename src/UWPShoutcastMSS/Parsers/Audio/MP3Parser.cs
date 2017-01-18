@@ -10,13 +10,13 @@ namespace UWPShoutcastMSS.Parsers.Audio
     {
         //Reference: https://www.mp3-tech.org/programmer/frame_header.html
 
-        public static readonly byte[] FrameSync = new byte[] { (byte)255, (byte)224 }; //12 bits - ADTS sync bits.
+        public static readonly byte[] FrameSync = new byte[] { (byte)255, (byte)7 }; //12 bits - ADTS sync bits.
         public const int HeaderLength = 4;
         //public const int HeaderLengthWithCRC = 9;
 
         public static bool IsFrameSync(byte firstByte, byte secondByte)
         {
-            return (firstByte == FrameSync[0] && (secondByte >> 5) == (byte)7 && secondByte != (byte)255);
+            return (firstByte == FrameSync[0] && (secondByte >> 5) == FrameSync[1] && secondByte != (byte)255);
         }
 
         public static double GetMPEGAudioVersion(byte[] header)
