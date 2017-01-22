@@ -655,7 +655,7 @@ namespace UWPShoutcastMSS.Streaming
             string track = "", artist = "";
             string songInfo = headers.First(x => x.Key == "STREAMTITLE").Value;
 
-            if (songInfo.Split('-').Count() >= 2)
+            if (songInfo.Split(new string[] { " - " }, StringSplitOptions.None).Count() >= 2)
             {
                 artist = songInfo.Split(new string[] { " - " }, StringSplitOptions.None)[0].Trim();
                 track = songInfo.Split(new string[] { " - " }, StringSplitOptions.None)[1].Trim();
