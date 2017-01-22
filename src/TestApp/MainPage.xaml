@@ -10,15 +10,18 @@
     <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="*" />
-            <RowDefinition Height="100" />
+            <RowDefinition Height="Auto" MinHeight="100" />
             <RowDefinition Height="100" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Grid.Row="1">
+        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Grid.Row="1" Margin="0 0 0 10">
             <TextBlock Text="Now Playing" Style="{ThemeResource TitleTextBlockStyle}" />
             <TextBlock x:Name="SongBox" />
             <TextBlock x:Name="ArtistBox" />
+            <TextBlock x:Name="AudioFormatBox" />
+            <TextBlock x:Name="BitRateBox" />
+            <TextBlock x:Name="SampleRateBox" />
         </StackPanel>
 
         <Grid Grid.Row="2" HorizontalAlignment="Center">

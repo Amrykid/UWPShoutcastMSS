@@ -9,6 +9,7 @@ using Windows.Foundation;
 using Windows.Foundation.Collections;
 using Windows.Media.Core;
 using Windows.Media.Playback;
+using Windows.UI.Popups;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Controls.Primitives;
@@ -76,10 +77,26 @@ namespace TestApp
                 //Went to the shoutcast website and grabbed the highest ranked POP stream: Hitradio OE3
                 shoutcastStream = new UWPShoutcastMSS.Streaming.ShoutcastMediaSourceStream(selectedStation.Url);
                 shoutcastStream.MetadataChanged += StreamManager_MetadataChanged;
-                await shoutcastStream.ConnectAsync();
+                if (await shoutcastStream.ConnectAsync())
+                {
+                    MediaPlayer.SetMediaStreamSource(shoutcastStream.MediaStreamSource);
+                    MediaPlayer.Play();
 
-                MediaPlayer.SetMediaStreamSource(shoutcastStream.MediaStreamSource);
-                MediaPlayer.Play();
+                    SampleRateBox.Text = "Sample Rate: " + shoutcastStream.AudioInfo.SampleRate;
+                    BitRateBox.Text = "Bit Rate: " + shoutcastStream.AudioInfo.BitRate;
+                    AudioFormatBox.Text = "Audio Format: " + Enum.GetName(typeof(UWPShoutcastMSS.Streaming.ShoutcastMediaSourceStream.StreamAudioFormat), shoutcastStream.AudioInfo.AudioFormat);
+                }
+                else
+                {
+                    playButton.IsEnabled = true;
+                    stationComboBox.IsEnabled = true;
+                    stopButton.IsEnabled = false;
+
+                    shoutcastStream.MetadataChanged -= StreamManager_MetadataChanged;
+
+                    MessageDialog dialog = new MessageDialog("Unable to connect!");
+                    await dialog.ShowAsync();
+                }
             }
         }
 
