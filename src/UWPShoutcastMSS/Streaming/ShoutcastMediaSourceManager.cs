@@ -17,6 +17,21 @@ namespace UWPShoutcastMSS.Streaming
 {
     public class ShoutcastMediaSourceStream
     {
+        //http://stackoverflow.com/questions/6294807/calculate-mpeg-frame-length-ms
+
+        TimeSpan timeOffSet = new TimeSpan();
+        private UInt64 byteOffset;
+
+        #region MP3 Framesize and length for Layer II and Layer III - https://code.msdn.microsoft.com/windowsapps/MediaStreamSource-media-dfd55dff/sourcecode?fileId=111712&pathId=208523738
+
+        UInt32 mp3_sampleSize = 1152;
+        TimeSpan mp3_sampleDuration = new TimeSpan(0, 0, 0, 0, 70);
+        #endregion
+
+        //AAC_ADTS := https://wiki.multimedia.cx/index.php/ADTS
+        UInt32 aac_adts_sampleSize = 1024;
+        TimeSpan aac_adts_sampleDuration = new TimeSpan(0, 0, 0, 0, 70);
+
         public enum StreamAudioFormat
         {
             MP3,
@@ -26,6 +41,7 @@ namespace UWPShoutcastMSS.Streaming
 
         public Windows.Media.Core.MediaStreamSource MediaStreamSource { get; private set; }
         public ShoutcastStationInfo StationInfo { get; private set; }
+        public ServerAudioInfo AudioInfo { get; private set; }
 
         public bool ShouldGetMetadata { get; private set; }
         public static string UserAgent { get; set; }
@@ -35,17 +51,12 @@ namespace UWPShoutcastMSS.Streaming
         DataReader socketReader = null;
         private volatile bool connected = false;
         private string relativePath = ";";
-        private uint sampleRate = 44100;
-        private uint channelCount = 2;
         private ShoutcastServerType serverType = ShoutcastServerType.Shoutcast;
 
         Uri streamUrl = null;
 
-        uint bitRate = 0;
         uint metadataInt = 0;
         uint metadataPos = 0;
-
-        StreamAudioFormat contentType = StreamAudioFormat.MP3;
 
         public void Disconnect()
         {
@@ -68,21 +79,6 @@ namespace UWPShoutcastMSS.Streaming
             connected = false;
         }
 
-        //http://stackoverflow.com/questions/6294807/calculate-mpeg-frame-length-ms
-
-        TimeSpan timeOffSet = new TimeSpan();
-        private UInt64 byteOffset;
-
-        #region MP3 Framesize and length for Layer II and Layer III - https://code.msdn.microsoft.com/windowsapps/MediaStreamSource-media-dfd55dff/sourcecode?fileId=111712&pathId=208523738
-
-        UInt32 mp3_sampleSize = 1152;
-        TimeSpan mp3_sampleDuration = new TimeSpan(0, 0, 0, 0, 70);
-        #endregion
-
-        //AAC_ADTS := https://wiki.multimedia.cx/index.php/ADTS
-        UInt32 aac_adts_sampleSize = 1024;
-        TimeSpan aac_adts_sampleDuration = new TimeSpan(0, 0, 0, 0, 70);
-
         public ShoutcastMediaSourceStream(Uri url, ShoutcastServerType stationServerType = ShoutcastServerType.Shoutcast, string relativePath = ";", bool getMetadata = true)
         {
             StationInfo = new ShoutcastStationInfo();
@@ -92,6 +88,8 @@ namespace UWPShoutcastMSS.Streaming
             serverType = stationServerType;
 
             socket = new StreamSocket();
+
+            AudioInfo = new ServerAudioInfo();
 
             ShouldGetMetadata = getMetadata;
 
@@ -155,9 +153,6 @@ namespace UWPShoutcastMSS.Streaming
                  * from: http://www.indexcom.com/streaming/player/Icecast2.html
                  */
 
-                int sampleRate = 0;
-                int channelCount = 0;
-
                 string headerValue = headers.First(x => x.Key.ToLower() == "ice-audio-info").Value;
 
                 //split the properties and values and parsed them into a usable object.
@@ -168,23 +163,23 @@ namespace UWPShoutcastMSS.Streaming
 
                 //grab each value that we need.
 
-                if (bitRate == 0) //usually this is sent in the regular headers. grab it if it isn't.
-                    bitRate = uint.Parse(propertiesAndValues.First(x => x.Key == "ice-bitrate" || x.Key == "bitrate").Value);
+                if (AudioInfo.BitRate == 0) //usually this is sent in the regular headers. grab it if it isn't.
+                    AudioInfo.BitRate = uint.Parse(propertiesAndValues.First(x => x.Key == "ice-bitrate" || x.Key == "bitrate").Value);
 
 
                 if (propertiesAndValues.Any(x => x.Key == "ice-channels" || x.Key == "channels") && propertiesAndValues.Any(x => x.Key == "ice-samplerate" || x.Key == "samplerate"))
                 {
-                    channelCount = int.Parse(propertiesAndValues.First(x => x.Key == "ice-channels" || x.Key == "channels").Value);
-                    sampleRate = int.Parse(propertiesAndValues.First(x => x.Key == "ice-samplerate" || x.Key == "samplerate").Value);
+                    AudioInfo.ChannelCount = uint.Parse(propertiesAndValues.First(x => x.Key == "ice-channels" || x.Key == "channels").Value);
+                    AudioInfo.SampleRate = uint.Parse(propertiesAndValues.First(x => x.Key == "ice-samplerate" || x.Key == "samplerate").Value);
 
                     //now just create the appropriate AudioEncodingProperties object.
-                    switch (contentType)
+                    switch (AudioInfo.AudioFormat)
                     {
                         case StreamAudioFormat.MP3:
-                            return AudioEncodingProperties.CreateMp3((uint)sampleRate, (uint)channelCount, bitRate);
+                            return AudioEncodingProperties.CreateMp3(AudioInfo.SampleRate, AudioInfo.ChannelCount, AudioInfo.BitRate);
                         case StreamAudioFormat.AAC:
                         case StreamAudioFormat.AAC_ADTS:
-                            return AudioEncodingProperties.CreateAacAdts((uint)sampleRate, (uint)channelCount, bitRate);
+                            return AudioEncodingProperties.CreateAacAdts(AudioInfo.SampleRate, AudioInfo.ChannelCount, AudioInfo.BitRate);
                     }
                 }
                 else
@@ -208,10 +203,8 @@ namespace UWPShoutcastMSS.Streaming
 
             AudioEncodingProperties obtainedProperties = null;
             IBuffer buffer = null;
-            int sampleRate = 0;
-            int channelCount = 0;
 
-            switch (contentType)
+            switch (AudioInfo.AudioFormat)
             {
                 case StreamAudioFormat.MP3:
                     {
@@ -241,13 +234,13 @@ namespace UWPShoutcastMSS.Streaming
                                 byteOffset += 2;
                                 metadataPos += 2;
 
-                                sampleRate = MP3Parser.GetSampleRate(header);
+                                AudioInfo.SampleRate = (uint)MP3Parser.GetSampleRate(header);
 
-                                channelCount = MP3Parser.GetChannelCount(header);
+                                AudioInfo.ChannelCount = (uint)MP3Parser.GetChannelCount(header);
 
-                                bitRate = (uint)MP3Parser.GetBitRate(header);
+                                AudioInfo.BitRate = (uint)MP3Parser.GetBitRate(header);
 
-                                if (bitRate == 0) throw new Exception("Unknown bitrate.");
+                                if (AudioInfo.BitRate == 0) throw new Exception("Unknown bitrate.");
                                 break;
                             }
                             else
@@ -264,7 +257,7 @@ namespace UWPShoutcastMSS.Streaming
                         byteOffset += mp3_sampleSize - MP3Parser.HeaderLength;
 
 
-                        obtainedProperties = AudioEncodingProperties.CreateMp3((uint)sampleRate, (uint)channelCount, bitRate);
+                        obtainedProperties = AudioEncodingProperties.CreateMp3((uint)AudioInfo.SampleRate, (uint)AudioInfo.ChannelCount, AudioInfo.BitRate);
 
                         break;
                     }
@@ -306,21 +299,21 @@ namespace UWPShoutcastMSS.Streaming
 
                                 //todo deal with CRC
 
-                                sampleRate = AAC_ADTSParser.GetSampleRate(header);
+                                AudioInfo.SampleRate = (uint)AAC_ADTSParser.GetSampleRate(header);
 
-                                channelCount = AAC_ADTSParser.GetChannelCount(header);
+                                AudioInfo.ChannelCount = (uint)AAC_ADTSParser.GetChannelCount(header);
 
                                 //bitrate gets sent by the server.
                                 //bitRate = (uint)AAC_ADTSParser.GetBitRate(header);
 
-                                if (bitRate == 0) throw new Exception("Unknown bitrate.");
+                                if (AudioInfo.BitRate == 0) throw new Exception("Unknown bitrate.");
 
                                 //skip the entire first frame/sample to get back on track
                                 await socketReader.LoadAsync(aac_adts_sampleSize - AAC_ADTSParser.HeaderLength);
                                 buffer = socketReader.ReadBuffer(aac_adts_sampleSize - AAC_ADTSParser.HeaderLength);
                                 byteOffset += aac_adts_sampleSize - AAC_ADTSParser.HeaderLength;
 
-                                obtainedProperties = AudioEncodingProperties.CreateAacAdts((uint)sampleRate, (uint)channelCount, bitRate);
+                                obtainedProperties = AudioEncodingProperties.CreateAacAdts((uint)AudioInfo.SampleRate, (uint)AudioInfo.ChannelCount, AudioInfo.BitRate);
 
                                 break;
                             }
@@ -405,6 +398,7 @@ namespace UWPShoutcastMSS.Streaming
                 response += socketReader.ReadString(1);
             }
 
+            //todo support http 2.0. maybe usage of the http client would solve this.
             if (response.StartsWith("HTTP/1.0 200 OK") || response.StartsWith("HTTP/1.1 200 OK") || response.StartsWith("ICY 200"))
             {
                 var headers = ParseResponse(response);
@@ -464,19 +458,19 @@ namespace UWPShoutcastMSS.Streaming
             if (StationInfoChanged != null)
                 StationInfoChanged(this, EventArgs.Empty);
 
-            bitRate = uint.Parse(headers.FirstOrDefault(x => x.Key == "ICY-BR").Value);
+            AudioInfo.BitRate = uint.Parse(headers.FirstOrDefault(x => x.Key == "ICY-BR").Value);
             metadataInt = uint.Parse(headers.First(x => x.Key == "ICY-METAINT").Value);
 
             switch (headers.First(x => x.Key == "CONTENT-TYPE").Value.ToLower().Trim())
             {
                 case "audio/mpeg":
-                    contentType = StreamAudioFormat.MP3;
+                    AudioInfo.AudioFormat = StreamAudioFormat.MP3;
                     break;
                 case "audio/aac":
-                    contentType = StreamAudioFormat.AAC;
+                    AudioInfo.AudioFormat = StreamAudioFormat.AAC;
                     break;
                 case "audio/aacp":
-                    contentType = StreamAudioFormat.AAC_ADTS;
+                    AudioInfo.AudioFormat = StreamAudioFormat.AAC_ADTS;
                     break;
             }
 
@@ -529,7 +523,7 @@ namespace UWPShoutcastMSS.Streaming
                 //request.ReportSampleProgress(25);
 
                 //if metadataPos is less than mp3_sampleSize away from metadataInt
-                if (metadataInt - metadataPos <= (contentType == StreamAudioFormat.MP3 ? mp3_sampleSize : aac_adts_sampleSize) && metadataInt - metadataPos > 0)
+                if (metadataInt - metadataPos <= (AudioInfo.AudioFormat == StreamAudioFormat.MP3 ? mp3_sampleSize : aac_adts_sampleSize) && metadataInt - metadataPos > 0)
                 {
                     //parse part of the frame.
 
@@ -548,7 +542,7 @@ namespace UWPShoutcastMSS.Streaming
 
                     metadataPos += metadataInt - metadataPos;
 
-                    switch (contentType)
+                    switch (AudioInfo.AudioFormat)
                     {
                         case StreamAudioFormat.MP3:
                             {
@@ -573,7 +567,7 @@ namespace UWPShoutcastMSS.Streaming
 
                     //request.ReportSampleProgress(50);
 
-                    switch (contentType)
+                    switch (AudioInfo.AudioFormat)
                     {
                         case StreamAudioFormat.MP3:
                             {
