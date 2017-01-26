@@ -373,10 +373,6 @@ namespace UWPShoutcastMSS.Streaming
 
             if (response.IsSuccessStatusCode)
             {
-                response.Content.BufferAllAsync();
-
-                await Task.Delay(3000);
-
                 ParseResponse(response);
 
                 return new Tuple<bool, HttpResponseMessage>(true, response);
