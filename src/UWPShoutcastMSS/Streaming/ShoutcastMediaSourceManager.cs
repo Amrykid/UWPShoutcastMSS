@@ -12,6 +12,7 @@ using Windows.Storage.Streams;
 using System.Runtime.InteropServices.WindowsRuntime;
 using Windows.Networking.Connectivity;
 using UWPShoutcastMSS.Parsers.Audio;
+using Windows.Web.Http;
 
 namespace UWPShoutcastMSS.Streaming
 {
@@ -46,8 +47,7 @@ namespace UWPShoutcastMSS.Streaming
         public bool ShouldGetMetadata { get; private set; }
         public static string UserAgent { get; set; }
 
-        StreamSocket socket = null;
-        DataWriter socketWriter = null;
+        HttpClient httpClient = null;
         DataReader socketReader = null;
         private volatile bool connected = false;
         private string relativePath = ";";
@@ -70,9 +70,8 @@ namespace UWPShoutcastMSS.Streaming
 
             try
             {
-                socketWriter.Dispose();
-                socketReader.Dispose();
-                socket.Dispose();
+                socketReader?.Dispose();
+                httpClient?.Dispose();
             }
             catch (Exception) { }
 
@@ -86,8 +85,6 @@ namespace UWPShoutcastMSS.Streaming
             streamUrl = url;
 
             serverType = stationServerType;
-
-            socket = new StreamSocket();
 
             AudioInfo = new ServerAudioInfo();
 
@@ -105,15 +102,12 @@ namespace UWPShoutcastMSS.Streaming
 
             try
             {
-                socketWriter.Dispose();
-                socketReader.Dispose();
-                socket.Dispose();
+                socketReader?.Dispose();
+                httpClient?.Dispose();
             }
             catch (Exception) { }
 
             connected = false;
-
-            socket = new StreamSocket();
 
             await ConnectAsync();
         }
@@ -122,7 +116,12 @@ namespace UWPShoutcastMSS.Streaming
             var response = await EstablishConnectionAsync();
 
             connected = response.Item1;
-            if (connected == false) return false;
+            if (connected == false)
+            {
+                MediaStreamSource?.NotifyError(MediaStreamSourceErrorStatus.FailedToConnectToServer);
+
+                return false;
+            }
 
             AudioEncodingProperties obtainedProperties = await GetEncodingPropertiesAsync(response.Item2);
 
@@ -139,10 +138,10 @@ namespace UWPShoutcastMSS.Streaming
 
         }
 
-        private async Task<AudioEncodingProperties> GetEncodingPropertiesAsync(KeyValuePair<string, string>[] headers)
+        private async Task<AudioEncodingProperties> GetEncodingPropertiesAsync(HttpResponseMessage response)
         {
             //if this happens to be an Icecast 2 server, it'll send the audio information for us.
-            if (headers.Any(x => x.Key.ToLower() == "ice-audio-info"))
+            if (response.Headers.Any(x => x.Key.ToLower() == "ice-audio-info"))
             {
                 //looks like it is indeed an Icecast 2 server. lets strip out the data and be on our way.
 
@@ -153,7 +152,7 @@ namespace UWPShoutcastMSS.Streaming
                  * from: http://www.indexcom.com/streaming/player/Icecast2.html
                  */
 
-                string headerValue = headers.First(x => x.Key.ToLower() == "ice-audio-info").Value;
+                string headerValue = response.Headers.First(x => x.Key.ToLower() == "ice-audio-info").Value;
 
                 //split the properties and values and parsed them into a usable object.
                 KeyValuePair<string, string>[] propertiesAndValues = headerValue.Split(';')
@@ -346,122 +345,98 @@ namespace UWPShoutcastMSS.Streaming
             //todo fire an event?
         }
 
-        private async Task<Tuple<bool, KeyValuePair<string, string>[]>> EstablishConnectionAsync()
+        private async Task<Tuple<bool, HttpResponseMessage>> EstablishConnectionAsync()
         {
             //http://www.smackfu.com/stuff/programming/shoutcast.html
+
+            httpClient = new HttpClient();
+
+            var actualUrlStr = streamUrl.ToString();
+            if (!actualUrlStr.EndsWith(relativePath))
+                actualUrlStr += relativePath;
+            Uri actualUrl = new Uri(actualUrlStr);
+
+            HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, actualUrl);
+            request.Headers.Add("Icy-MetaData", ShouldGetMetadata ? "1" : "0");
+            request.Headers.Add("User-Agent", (UserAgent ?? "Shoutcast Player (http://github.com/Amrykid/UWPShoutcastMSS)"));
+
+            HttpResponseMessage response = null;
+
             try
             {
-                await socket.ConnectAsync(new Windows.Networking.HostName(streamUrl.Host), streamUrl.Port.ToString());
-
-                socketWriter = new DataWriter(socket.OutputStream);
-                socketReader = new DataReader(socket.InputStream);
+                response = await httpClient.SendRequestAsync(request, HttpCompletionOption.ResponseHeadersRead);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                if (MediaStreamSource != null)
-                    MediaStreamSource.NotifyError(MediaStreamSourceErrorStatus.FailedToConnectToServer);
-                else
-                    throw new Exception("Connection Error", ex);
-
-                return new Tuple<bool, KeyValuePair<string, string>[]>(false, null);
+                return new Tuple<bool, HttpResponseMessage>(false, null);
             }
 
-            //todo figure out how to resolve http requests better to get rid of this hack.
-            String httpPath = "";
-
-            if (streamUrl.Host.Contains("radionomy.com") || serverType == ShoutcastServerType.Radionomy)
+            if (response.IsSuccessStatusCode)
             {
-                httpPath = streamUrl.LocalPath;
-                serverType = ShoutcastServerType.Radionomy;
-            }
-            else
-            {
-                httpPath = "/" + relativePath;
-            }
+                response.Content.BufferAllAsync();
 
-            socketWriter.WriteString("GET " + httpPath + " HTTP/1.1" + Environment.NewLine);
+                await Task.Delay(3000);
 
-            if (ShouldGetMetadata)
-                socketWriter.WriteString("Icy-MetaData: 1" + Environment.NewLine);
+                ParseResponse(response);
 
-            socketWriter.WriteString("Host: " + streamUrl.Host + (streamUrl.Port != 80 ? ":" + streamUrl.Port : "") + Environment.NewLine);
-            socketWriter.WriteString("Connection: Keep-Alive" + Environment.NewLine);
-            socketWriter.WriteString("User-Agent: " + (UserAgent ?? "Shoutcast Player (http://github.com/Amrykid/UWPShoutcastMSS)") + Environment.NewLine);
-            socketWriter.WriteString(Environment.NewLine);
-            await socketWriter.StoreAsync();
-            await socketWriter.FlushAsync();
-
-            string response = string.Empty;
-            while (!response.EndsWith(Environment.NewLine + Environment.NewLine))
-            {
-                await socketReader.LoadAsync(1);
-                response += socketReader.ReadString(1);
-            }
-
-            //todo support http 2.0. maybe usage of the http client would solve this.
-            if (response.StartsWith("HTTP/1.0 200 OK") || response.StartsWith("HTTP/1.1 200 OK") || response.StartsWith("ICY 200"))
-            {
-                var headers = ParseResponse(response);
-
-                return new Tuple<bool, KeyValuePair<string, string>[]>(true, headers);
+                return new Tuple<bool, HttpResponseMessage>(true, response);
             }
             else
             {
                 //wasn't successful. handle each case accordingly.
 
-                if (response.StartsWith("HTTP /1.0 302") || response.StartsWith("HTTP/1.1 302"))
+                if (response.StatusCode == (HttpStatusCode)302)
                 {
-                    socketReader.Dispose();
-                    socketWriter.Dispose();
-                    socket.Dispose();
+                    //socketReader.Dispose();
+                    //socketWriter.Dispose();
+                    //socket.Dispose();
 
-                    var parsedResponse = ParseHttpResponseToKeyPairArray(response.Split(new string[] { "\r\n" }, StringSplitOptions.None).Skip(1).ToArray());
+                    //var parsedResponse = ParseHttpResponseToKeyPairArray(response.Split(new string[] { "\r\n" }, StringSplitOptions.None).Skip(1).ToArray());
 
-                    socket = new StreamSocket();
-                    streamUrl = new Uri(parsedResponse.First(x => x.Key.ToLower() == "location").Value);
+                    //socket = new StreamSocket();
+                    //streamUrl = new Uri(parsedResponse.First(x => x.Key.ToLower() == "location").Value);
 
-                    return await EstablishConnectionAsync();
+                    //return await EstablishConnectionAsync();
+
+                    //redirection? i think the client handles this.
                 }
-                else if (response.StartsWith("HTTP/1.0 404"))
+                else if (response.StatusCode == HttpStatusCode.NotFound)
                 {
                     throw new Exception("Station is unavailable.");
                 }
-                else if (response.StartsWith("ICY 401")) //ICY 401 Service Unavailable
-                {
-                    if (MediaStreamSource != null)
-                        MediaStreamSource.NotifyError(MediaStreamSourceErrorStatus.FailedToConnectToServer);
-                    else
-                        throw new Exception("Station is unavailable at this time. Maybe they're down for maintainence?");
+                //else if (response.StatusCode == ) //ICY 401 Service Unavailable
+                //{
+                //    if (MediaStreamSource != null)
+                //        MediaStreamSource.NotifyError(MediaStreamSourceErrorStatus.FailedToConnectToServer);
+                //    else
+                //        throw new Exception("Station is unavailable at this time. Maybe they're down for maintainence?");
 
-                    return new Tuple<bool, KeyValuePair<string, string>[]>(false, null);
-                }
-                else if (response.StartsWith("HTTP/1.1 503")) //HTTP/1.1 503 Server limit reached
+                //    return new Tuple<bool, KeyValuePair<string, string>[]>(false, null);
+                //}
+                else if (response.StatusCode == HttpStatusCode.ServiceUnavailable) //HTTP/1.1 503 Server limit reached
                 {
                     throw new Exception("Station is unavailable at this time. The maximum amount of listeners has been reached.");
                 }
             }
 
-            return new Tuple<bool, KeyValuePair<string, string>[]>(false, null); //not connected and no headers.
+            return new Tuple<bool, HttpResponseMessage>(false, null); //not connected and no headers.
         }
 
-        private KeyValuePair<string, string>[] ParseResponse(string response)
+        private HttpResponseMessage ParseResponse(HttpResponseMessage response)
         {
-            string[] responseSplitByLine = response.Split(new string[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries);
-            KeyValuePair<string, string>[] headers = ParseHttpResponseToKeyPairArray(responseSplitByLine);
+            StationInfo.StationName = response.Headers.First(x => x.Key == "ICY-NAME").Value;
+            StationInfo.StationGenre = response.Headers.First(x => x.Key == "ICY-GENRE").Value;
 
-            StationInfo.StationName = headers.First(x => x.Key == "ICY-NAME").Value;
-            StationInfo.StationGenre = headers.First(x => x.Key == "ICY-GENRE").Value;
-
-            if (headers.Any(x => x.Key.ToUpper() == "ICY-DESCRIPTION"))
-                StationInfo.StationDescription = headers.First(x => x.Key.ToUpper() == "ICY-DESCRIPTION").Value;
+            if (response.Headers.Any(x => x.Key.ToUpper() == "ICY-DESCRIPTION"))
+                StationInfo.StationDescription = response.Headers.First(x => x.Key.ToUpper() == "ICY-DESCRIPTION").Value;
 
             if (StationInfoChanged != null)
                 StationInfoChanged(this, EventArgs.Empty);
 
-            AudioInfo.BitRate = uint.Parse(headers.FirstOrDefault(x => x.Key == "ICY-BR").Value);
-            metadataInt = uint.Parse(headers.First(x => x.Key == "ICY-METAINT").Value);
+            AudioInfo.BitRate = uint.Parse(response.Headers.FirstOrDefault(x => x.Key == "ICY-BR").Value);
+            metadataInt = uint.Parse(response.Headers.First(x => x.Key == "ICY-METAINT").Value);
 
-            switch (headers.First(x => x.Key == "CONTENT-TYPE").Value.ToLower().Trim())
+            switch (response.Content.Headers.First(x => x.Key == "CONTENT-TYPE").Value.ToLower().Trim())
             {
                 case "audio/mpeg":
                     AudioInfo.AudioFormat = StreamAudioFormat.MP3;
@@ -476,7 +451,7 @@ namespace UWPShoutcastMSS.Streaming
 
 
 
-            return headers;
+            return response;
         }
 
         private static KeyValuePair<string, string>[] ParseHttpResponseToKeyPairArray(string[] responseSplitByLine)
