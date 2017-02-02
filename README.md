@@ -1,6 +1,6 @@
 # UWPShoutcastMSS
 
-A library for connecting to Shoutcast in Windows 10 UWP applications. It's more of a hack than a proper library, but it gets the job done.
+A library for connecting to Shoutcast in Windows 10 UWP applications.
 
 ## How to use it
 
