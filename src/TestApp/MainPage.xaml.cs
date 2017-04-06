@@ -53,7 +53,7 @@ namespace TestApp
             stationComboBox.SelectedIndex = 0;
         }
 
-        UWPShoutcastMSS.Streaming.ShoutcastMediaSourceStream shoutcastStream = null;
+        UWPShoutcastMSS.Streaming.ShoutcastStream shoutcastStream = null;
 
         private async void StreamManager_MetadataChanged(object sender, ShoutcastMediaSourceStreamMetadataChangedEventArgs e)
         {
@@ -74,25 +74,24 @@ namespace TestApp
 
             if (selectedStation != null)
             {
-                //Went to the shoutcast website and grabbed the highest ranked POP stream: Hitradio OE3
-                shoutcastStream = new UWPShoutcastMSS.Streaming.ShoutcastMediaSourceStream(selectedStation.Url);
-                shoutcastStream.MetadataChanged += StreamManager_MetadataChanged;
-                if (await shoutcastStream.ConnectAsync())
+                
+                try
                 {
+                    shoutcastStream = await ShoutcastStreamFactory.ConnectAsync(selectedStation.Url);
+                    
                     MediaPlayer.SetMediaStreamSource(shoutcastStream.MediaStreamSource);
                     MediaPlayer.Play();
 
                     SampleRateBox.Text = "Sample Rate: " + shoutcastStream.AudioInfo.SampleRate;
                     BitRateBox.Text = "Bit Rate: " + shoutcastStream.AudioInfo.BitRate;
-                    AudioFormatBox.Text = "Audio Format: " + Enum.GetName(typeof(UWPShoutcastMSS.Streaming.ShoutcastMediaSourceStream.StreamAudioFormat), shoutcastStream.AudioInfo.AudioFormat);
+                    AudioFormatBox.Text = "Audio Format: " + Enum.GetName(typeof(UWPShoutcastMSS.Streaming.StreamAudioFormat), shoutcastStream.AudioInfo.AudioFormat);
                 }
-                else
+                catch (Exception ex)
                 {
                     playButton.IsEnabled = true;
                     stationComboBox.IsEnabled = true;
                     stopButton.IsEnabled = false;
-
-                    shoutcastStream.MetadataChanged -= StreamManager_MetadataChanged;
+                    
 
                     MessageDialog dialog = new MessageDialog("Unable to connect!");
                     await dialog.ShowAsync();
@@ -112,7 +111,7 @@ namespace TestApp
                 MediaPlayer.Stop();
                 MediaPlayer.Source = null;
 
-                shoutcastStream.Disconnect();
+                //shoutcastStream.Disconnect();
                 shoutcastStream = null;
             }
         }

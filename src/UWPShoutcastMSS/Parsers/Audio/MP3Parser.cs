@@ -23,7 +23,23 @@ namespace UWPShoutcastMSS.Parsers.Audio
 
         public static bool IsFrameSync(byte firstByte, byte secondByte)
         {
-            return (firstByte == FrameSync[0] && (secondByte >> 5) == FrameSync[1] && secondByte != (byte)255);
+            //AAAAAAAA AAABBCCD EEEEFFGH IIJJKLMM 
+            bool result = false;
+
+            bool testOne = firstByte == FrameSync[0] && (secondByte >> 5) == FrameSync[1]; //matches the frame sync bits
+
+
+            bool testTwo = false; //test audio version data
+            byte testTwoByte = (byte)(secondByte << 3);
+            testTwoByte = (byte)(testTwoByte >> 6);
+            testTwo = testTwoByte != (byte)1 && testTwoByte < 4; //make sure we're not using a "reserved" mpeg audio version
+
+            bool testThree = false; //test audio layer data
+            byte testThreeByte = (byte)(secondByte << 5);
+            testThreeByte = (byte)(testThreeByte >> 6);
+            testThree = testThreeByte != (byte)0 && testThreeByte < 4; //make sure we're not using a "reserved" mpeg audio layer
+
+            return testOne && testTwo && testThree;
         }
 
         public static double GetMPEGAudioVersion(byte[] header)
