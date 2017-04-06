@@ -24,8 +24,6 @@ namespace UWPShoutcastMSS.Parsers.Audio
         public static bool IsFrameSync(byte firstByte, byte secondByte)
         {
             //AAAAAAAA AAABBCCD EEEEFFGH IIJJKLMM 
-            bool result = false;
-
             bool testOne = firstByte == FrameSync[0] && (secondByte >> 5) == FrameSync[1]; //matches the frame sync bits
 
 

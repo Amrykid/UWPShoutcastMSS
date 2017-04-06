@@ -120,6 +120,7 @@
     <Compile Include="Streaming\ShoutcastStream.cs" />
     <Compile Include="Streaming\ShoutcastStreamFactory.cs" />
     <Compile Include="Streaming\ShoutcastStreamFactoryConnectionSettings.cs" />
+    <Compile Include="Streaming\ShoutcastStreamProcessor.cs" />
     <EmbeddedResource Include="Properties\UWPShoutcastMSS.rd.xml" />
   </ItemGroup>
   <ItemGroup />

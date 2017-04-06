@@ -78,7 +78,7 @@ namespace TestApp
                 try
                 {
                     shoutcastStream = await ShoutcastStreamFactory.ConnectAsync(selectedStation.Url);
-                    
+                    shoutcastStream.MetadataChanged += StreamManager_MetadataChanged;
                     MediaPlayer.SetMediaStreamSource(shoutcastStream.MediaStreamSource);
                     MediaPlayer.Play();
 
@@ -111,7 +111,7 @@ namespace TestApp
                 MediaPlayer.Stop();
                 MediaPlayer.Source = null;
 
-                //shoutcastStream.Disconnect();
+                shoutcastStream.Disconnect();
                 shoutcastStream = null;
             }
         }

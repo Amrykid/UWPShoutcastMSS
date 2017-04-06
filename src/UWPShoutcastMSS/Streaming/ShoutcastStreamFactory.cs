@@ -33,7 +33,7 @@ namespace UWPShoutcastMSS.Streaming
             ShoutcastStream shoutStream = null;
 
             await socket.ConnectAsync(new Windows.Networking.HostName(serverUrl.Host), serverUrl.Port.ToString());
-            
+
             socketWriter = new DataWriter(socket.OutputStream);
             socketReader = new DataReader(socket.InputStream);
 
@@ -53,8 +53,8 @@ namespace UWPShoutcastMSS.Streaming
 
             //start reading the headers from the response
             string response = string.Empty;
-            while (!response.EndsWith(Environment.NewLine + Environment.NewLine)) 
-                //loop until we get the double line-ending signifying the end of the headers
+            while (!response.EndsWith(Environment.NewLine + Environment.NewLine))
+            //loop until we get the double line-ending signifying the end of the headers
             {
                 await socketReader.LoadAsync(1);
                 response += socketReader.ReadString(1);
@@ -68,7 +68,7 @@ namespace UWPShoutcastMSS.Streaming
 
             var action = ParseHttpCode(httpLine, response, shoutStream);
 
-            switch(action.ActionType)
+            switch (action.ActionType)
             {
                 case ConnectionActionType.Success:
                     var headers = ParseResponse(response, shoutStream);
@@ -88,19 +88,20 @@ namespace UWPShoutcastMSS.Streaming
             var protocolBit = bits[0].ToUpper(); //always 'HTTP' or 'ICY
             int statusCode = int.Parse(bits[1]);
 
-            switch(protocolBit)
+            switch (protocolBit)
             {
-                case "HTTP":
+                case "ICY":
                     {
-                        switch(statusCode)
+                        switch (statusCode)
                         {
                             case 200: return ConnectionAction.FromSuccess();
                         }
                     }
                     break;
-                case "ICY":
+                default:
+                    if (protocolBit.StartsWith("HTTP/"))
                     {
-                        switch(statusCode)
+                        switch (statusCode)
                         {
                             case 200: return ConnectionAction.FromSuccess();
                         }
@@ -114,7 +115,7 @@ namespace UWPShoutcastMSS.Streaming
         private static KeyValuePair<string, string>[] ParseResponse(string response, ShoutcastStream shoutStream)
         {
             string[] responseSplitByLine = response.Split(new string[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries);
-            KeyValuePair<string, string>[] headers = ParseHttpResponseToKeyPairArray(responseSplitByLine);         
+            KeyValuePair<string, string>[] headers = ParseHttpResponseToKeyPairArray(responseSplitByLine);
 
             shoutStream.metadataInt = uint.Parse(headers.First(x => x.Key == "ICY-METAINT").Value);
 
