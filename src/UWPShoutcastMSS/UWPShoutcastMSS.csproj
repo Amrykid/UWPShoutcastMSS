@@ -111,11 +111,15 @@
     <Compile Include="Parsers\Audio\MP3Parser.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Streaming\ByteExtensions.cs" />
+    <Compile Include="Streaming\ServerAudioFormat.cs" />
     <Compile Include="Streaming\ServerAudioInfo.cs" />
-    <Compile Include="Streaming\ShoutcastMediaSourceManager.cs" />
-    <Compile Include="Streaming\ShoutcastMediaSourceStreamMetadataChangedEventArgs.cs" />
+    <Compile Include="Streaming\Legacy\ShoutcastMediaSourceManager.cs" />
+    <Compile Include="Streaming\Legacy\ShoutcastMediaSourceStreamMetadataChangedEventArgs.cs" />
     <Compile Include="Streaming\ShoutcastServerType.cs" />
     <Compile Include="Streaming\ShoutcastStationInfo.cs" />
+    <Compile Include="Streaming\ShoutcastStream.cs" />
+    <Compile Include="Streaming\ShoutcastStreamFactory.cs" />
+    <Compile Include="Streaming\ShoutcastStreamFactoryConnectionSettings.cs" />
     <EmbeddedResource Include="Properties\UWPShoutcastMSS.rd.xml" />
   </ItemGroup>
   <ItemGroup />

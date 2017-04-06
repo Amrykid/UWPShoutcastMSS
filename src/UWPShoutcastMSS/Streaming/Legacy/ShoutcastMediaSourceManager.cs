@@ -22,23 +22,6 @@ namespace UWPShoutcastMSS.Streaming
         TimeSpan timeOffSet = new TimeSpan();
         private UInt64 byteOffset;
 
-        #region MP3 Framesize and length for Layer II and Layer III - https://code.msdn.microsoft.com/windowsapps/MediaStreamSource-media-dfd55dff/sourcecode?fileId=111712&pathId=208523738
-
-        UInt32 mp3_sampleSize = 1152;
-        TimeSpan mp3_sampleDuration = new TimeSpan(0, 0, 0, 0, 70);
-        #endregion
-
-        //AAC_ADTS := https://wiki.multimedia.cx/index.php/ADTS
-        UInt32 aac_adts_sampleSize = 1024;
-        TimeSpan aac_adts_sampleDuration = new TimeSpan(0, 0, 0, 0, 70);
-
-        public enum StreamAudioFormat
-        {
-            MP3,
-            AAC,
-            AAC_ADTS //https://en.wikipedia.org/wiki/High-Efficiency_Advanced_Audio_Coding
-        }
-
         public Windows.Media.Core.MediaStreamSource MediaStreamSource { get; private set; }
         public ShoutcastStationInfo StationInfo { get; private set; }
         public ServerAudioInfo AudioInfo { get; private set; }

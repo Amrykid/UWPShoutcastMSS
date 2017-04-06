@@ -8,6 +8,10 @@ namespace UWPShoutcastMSS.Parsers.Audio
 {
     public static class AAC_ADTSParser
     {
+        //AAC_ADTS := https://wiki.multimedia.cx/index.php/ADTS
+        public const UInt32 aac_adts_sampleSize = 1024;
+        public static TimeSpan aac_adts_sampleDuration = new TimeSpan(0, 0, 0, 0, 70);
+
         //Reference: https://wiki.multimedia.cx/index.php/ADTS
 
         public static readonly byte[] FrameSync = new byte[] { (byte)255, (byte)240 }; //12 bits - ADTS sync bits.

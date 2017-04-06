@@ -8,6 +8,13 @@ namespace UWPShoutcastMSS.Parsers.Audio
 {
     public static class MP3Parser
     {
+        #region MP3 Framesize and length for Layer II and Layer III - https://code.msdn.microsoft.com/windowsapps/MediaStreamSource-media-dfd55dff/sourcecode?fileId=111712&pathId=208523738
+
+        public const UInt32 mp3_sampleSize = 1152;
+        public static TimeSpan mp3_sampleDuration = new TimeSpan(0, 0, 0, 0, 70);
+        #endregion
+
+
         //Reference: https://www.mp3-tech.org/programmer/frame_header.html
 
         public static readonly byte[] FrameSync = new byte[] { (byte)255, (byte)7 }; //11 bits - ADTS sync bits.
