@@ -257,17 +257,11 @@ namespace UWPShoutcastMSS.Streaming
             var audioStreamDescriptor = new AudioStreamDescriptor(audioProperties);
             MediaStreamSource = new MediaStreamSource(audioStreamDescriptor);
             MediaStreamSource.SampleRequested += MediaStreamSource_SampleRequested;
-
-            streamProcessor.StartProcessing();
         }
 
         public void Disconnect()
         {
             MediaStreamSource.SampleRequested -= MediaStreamSource_SampleRequested;
-
-            streamProcessor?.StopProcessing();
-
-
 
             socketWriter.Dispose();
             socketReader.Dispose();
@@ -281,17 +275,7 @@ namespace UWPShoutcastMSS.Streaming
 
             var deferral = request.GetDeferral();
 
-            MediaStreamSample sample = null;
-
-            while ((sample = streamProcessor.GetNextSample()) == null)
-            {
-                //wait for a sample
-                await Task.Delay(50);
-
-                request.ReportSampleProgress(50);
-            }
-
-            request.Sample = sample;
+            request.Sample = await streamProcessor.GetNextSampleAsync();
 
             deferral.Complete();
         }

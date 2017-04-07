@@ -35,97 +35,6 @@ namespace UWPShoutcastMSS.Streaming
             this.socketReader = socketReader;
             this.socketWriter = socketWriter;
 
-            sampleQueue = new ConcurrentQueue<MediaStreamSample>();
-        }
-
-        internal void StartProcessing()
-        {
-            if (isRunning) throw new InvalidOperationException();
-
-            processingTaskCancel = new CancellationTokenSource();
-            processingTask = new Task(BufferAndSampleStream, processingTaskCancel.Token);
-
-            processingTask.Start();
-        }
-
-        internal void StopProcessing()
-        {
-            if (!isRunning) return;
-
-            processingTaskCancel.Cancel();
-
-            processingTask.Wait();
-
-            processingTaskCancel.Dispose();
-
-            isRunning = false;
-        }
-
-        private async void BufferAndSampleStream()
-        {
-            isRunning = true;
-
-            sampleProvider = AudioProviderFactory.GetAudioProvider(shoutcastStream.AudioInfo.AudioFormat);
-
-            //todo check for internet connection and socket connection as well
-            while (!processingTaskCancel.IsCancellationRequested)
-            {
-                MediaStreamSample sample = null;
-                uint sampleLength = 0;
-
-                if (processingTaskCancel.IsCancellationRequested) return;
-
-                //if metadataPos is less than mp3_sampleSize away from metadataInt
-                if (shoutcastStream.metadataInt - metadataPos <= sampleProvider.GetSampleSize()
-                    && shoutcastStream.metadataInt - metadataPos > 0)
-                {
-                    //parse part of the frame.
-
-                    byte[] partialFrame = new byte[shoutcastStream.metadataInt - metadataPos];
-
-                    var read = await socketReader.LoadAsync(shoutcastStream.metadataInt - metadataPos);
-
-                    socketReader.ReadBytes(partialFrame);
-
-                    metadataPos += shoutcastStream.metadataInt - metadataPos;
-
-
-                    Tuple<MediaStreamSample, uint> result = await sampleProvider.ParseSampleAsync(this, socketReader, partial: true, partialBytes: partialFrame);
-
-                    if (processingTaskCancel.IsCancellationRequested) return;
-
-                    sample = result.Item1;
-                    sampleLength = result.Item2;
-                }
-                else
-                {
-                    await HandleMetadata();
-
-                    Tuple<MediaStreamSample, uint> result = await sampleProvider.ParseSampleAsync(this, socketReader);
-
-                    if (processingTaskCancel.IsCancellationRequested) return;
-
-                    sample = result.Item1;
-                    sampleLength = result.Item2;
-
-
-                    if (sample == null || sampleLength == 0) //OLD bug: on RELEASE builds, sample.Buffer causes the app to die due to a possible .NET Native bug
-                    {
-                        //MediaStreamSource.NotifyError(MediaStreamSourceErrorStatus.DecodeError);
-                        //deferral.Complete();
-                        //return;
-                        continue;
-                    }
-                    else
-                    {
-                        metadataPos += sampleLength;
-                    }
-                }
-
-                sampleQueue.Enqueue(sample);
-            }
-
-            isRunning = false;
         }
 
         private async Task HandleMetadata()
@@ -191,10 +100,63 @@ namespace UWPShoutcastMSS.Streaming
             });
         }
 
-        internal MediaStreamSample GetNextSample()
+        internal async Task<MediaStreamSample> GetNextSampleAsync()
         {
+            sampleProvider = AudioProviderFactory.GetAudioProvider(shoutcastStream.AudioInfo.AudioFormat);
+
+            //todo check for internet connection and socket connection as well
+
             MediaStreamSample sample = null;
-            bool result = sampleQueue.TryDequeue(out sample);
+            uint sampleLength = 0;
+
+            if (processingTaskCancel.IsCancellationRequested) return null;
+
+            //if metadataPos is less than sampleSize away from metadataInt
+            if (shoutcastStream.metadataInt - metadataPos <= sampleProvider.GetSampleSize()
+                && shoutcastStream.metadataInt - metadataPos > 0)
+            {
+                //parse part of the frame.
+
+                byte[] partialFrame = new byte[shoutcastStream.metadataInt - metadataPos];
+
+                var read = await socketReader.LoadAsync(shoutcastStream.metadataInt - metadataPos);
+
+                socketReader.ReadBytes(partialFrame);
+
+                metadataPos += shoutcastStream.metadataInt - metadataPos;
+
+
+                Tuple<MediaStreamSample, uint> result = await sampleProvider.ParseSampleAsync(this, socketReader, partial: true, partialBytes: partialFrame);
+
+
+
+                sample = result.Item1;
+                sampleLength = result.Item2;
+            }
+            else
+            {
+                await HandleMetadata();
+
+                Tuple<MediaStreamSample, uint> result = await sampleProvider.ParseSampleAsync(this, socketReader);
+
+                if (processingTaskCancel.IsCancellationRequested) return null;
+
+                sample = result.Item1;
+                sampleLength = result.Item2;
+
+
+                if (sample == null || sampleLength == 0) //OLD bug: on RELEASE builds, sample.Buffer causes the app to die due to a possible .NET Native bug
+                {
+                    //MediaStreamSource.NotifyError(MediaStreamSourceErrorStatus.DecodeError);
+                    //deferral.Complete();
+                    //return;
+                    return null;
+                }
+                else
+                {
+                    metadataPos += sampleLength;
+                }
+            }
 
             return sample;
         }
