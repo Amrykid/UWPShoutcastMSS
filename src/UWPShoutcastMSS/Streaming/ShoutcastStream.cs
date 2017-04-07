@@ -274,8 +274,11 @@ namespace UWPShoutcastMSS.Streaming
             var request = args.Request;
 
             var deferral = request.GetDeferral();
+            var sample = await streamProcessor.GetNextSampleAsync();
 
-            request.Sample = await streamProcessor.GetNextSampleAsync();
+            if (sample != null)
+                request.Sample = sample;
+
 
             deferral.Complete();
         }
