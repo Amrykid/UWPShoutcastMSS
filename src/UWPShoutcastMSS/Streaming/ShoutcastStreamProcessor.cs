@@ -6,6 +6,7 @@ using System.Runtime.InteropServices.WindowsRuntime;
 using System.Threading;
 using System.Threading.Tasks;
 using UWPShoutcastMSS.Parsers.Audio;
+using UWPShoutcastMSS.Streaming.Providers;
 using Windows.Media.Core;
 using Windows.Networking.Sockets;
 using Windows.Storage.Streams;
@@ -21,10 +22,11 @@ namespace UWPShoutcastMSS.Streaming
         private Task processingTask = null;
         private CancellationTokenSource processingTaskCancel = null;
         private volatile bool isRunning = false;
-        private TimeSpan timeOffSet = new TimeSpan();
+        internal TimeSpan timeOffSet = new TimeSpan();
         internal uint metadataPos;
         internal uint byteOffset;
         private ConcurrentQueue<MediaStreamSample> sampleQueue = null;
+        private IAudioProvider sampleProvider = null;
 
         public ShoutcastStreamProcessor(ShoutcastStream shoutcastStream, StreamSocket socket, DataReader socketReader, DataWriter socketWriter)
         {
@@ -63,6 +65,8 @@ namespace UWPShoutcastMSS.Streaming
         {
             isRunning = true;
 
+            sampleProvider = AudioProviderFactory.GetAudioProvider(shoutcastStream.AudioInfo.AudioFormat);
+
             //todo check for internet connection and socket connection as well
             while (!processingTaskCancel.IsCancellationRequested)
             {
@@ -72,8 +76,7 @@ namespace UWPShoutcastMSS.Streaming
                 if (processingTaskCancel.IsCancellationRequested) return;
 
                 //if metadataPos is less than mp3_sampleSize away from metadataInt
-                if (shoutcastStream.metadataInt - metadataPos <=
-                    (shoutcastStream.AudioInfo.AudioFormat == StreamAudioFormat.MP3 ? MP3Parser.mp3_sampleSize : AAC_ADTSParser.aac_adts_sampleSize)
+                if (shoutcastStream.metadataInt - metadataPos <= sampleProvider.GetSampleSize()
                     && shoutcastStream.metadataInt - metadataPos > 0)
                 {
                     //parse part of the frame.
@@ -86,62 +89,24 @@ namespace UWPShoutcastMSS.Streaming
 
                     metadataPos += shoutcastStream.metadataInt - metadataPos;
 
-                    switch (shoutcastStream.AudioInfo.AudioFormat)
-                    {
-                        case StreamAudioFormat.MP3:
-                            {
-                                Tuple<MediaStreamSample, uint> result = await ParseMP3SampleAsync(partial: true, partialBytes: partialFrame);
 
-                                if (processingTaskCancel.IsCancellationRequested) return;
+                    Tuple<MediaStreamSample, uint> result = await sampleProvider.ParseSampleAsync(this, socketReader, partial: true, partialBytes: partialFrame);
 
-                                sample = result.Item1;
-                                sampleLength = result.Item2;
-                            }
-                            break;
-                        case StreamAudioFormat.AAC_ADTS:
-                        case StreamAudioFormat.AAC:
-                            {
-                                Tuple<MediaStreamSample, uint> result = await ParseAACSampleAsync(partial: true, partialBytes: partialFrame);
+                    if (processingTaskCancel.IsCancellationRequested) return;
 
-                                if (processingTaskCancel.IsCancellationRequested) return;
-
-                                sample = result.Item1;
-                                sampleLength = result.Item2;
-                            }
-                            break;
-                    }
+                    sample = result.Item1;
+                    sampleLength = result.Item2;
                 }
                 else
                 {
                     await HandleMetadata();
 
-                    //request.ReportSampleProgress(50);
+                    Tuple<MediaStreamSample, uint> result = await sampleProvider.ParseSampleAsync(this, socketReader);
 
-                    switch (shoutcastStream.AudioInfo.AudioFormat)
-                    {
-                        case StreamAudioFormat.MP3:
-                            {
-                                //mp3
-                                Tuple<MediaStreamSample, uint> result = await ParseMP3SampleAsync();
+                    if (processingTaskCancel.IsCancellationRequested) return;
 
-                                if (processingTaskCancel.IsCancellationRequested) return;
-
-                                sample = result.Item1;
-                                sampleLength = result.Item2;
-                            }
-                            break;
-                        case StreamAudioFormat.AAC_ADTS:
-                        case StreamAudioFormat.AAC:
-                            {
-                                Tuple<MediaStreamSample, uint> result = await ParseAACSampleAsync();
-
-                                if (processingTaskCancel.IsCancellationRequested) return;
-
-                                sample = result.Item1;
-                                sampleLength = result.Item2;
-                            }
-                            break;
-                    }
+                    sample = result.Item1;
+                    sampleLength = result.Item2;
 
 
                     if (sample == null || sampleLength == 0) //OLD bug: on RELEASE builds, sample.Buffer causes the app to die due to a possible .NET Native bug
@@ -224,93 +189,6 @@ namespace UWPShoutcastMSS.Streaming
                 Title = track,
                 Artist = artist
             });
-        }
-
-        private async Task<Tuple<MediaStreamSample, uint>> ParseMP3SampleAsync(bool partial = false, byte[] partialBytes = null)
-        {
-            if (processingTaskCancel.IsCancellationRequested) return null;
-
-            //http://www.mpgedit.org/mpgedit/mpeg_format/MP3Format.html
-
-            IBuffer buffer = null;
-            MediaStreamSample sample = null;
-            uint sampleLength = 0;
-
-            if (partial)
-            {
-                buffer = partialBytes.AsBuffer();
-                sampleLength = MP3Parser.mp3_sampleSize - (uint)partialBytes.Length;
-                byteOffset += sampleLength;
-            }
-            else
-            {
-                if (processingTaskCancel.IsCancellationRequested) return null;
-
-                var read = await socketReader.LoadAsync(MP3Parser.mp3_sampleSize);
-
-                if (processingTaskCancel.IsCancellationRequested) return null;
-
-                if (read < MP3Parser.mp3_sampleSize)
-                {
-                    buffer = socketReader.ReadBuffer(read);
-
-                    byteOffset += MP3Parser.mp3_sampleSize;
-                }
-                else
-                {
-                    buffer = socketReader.ReadBuffer(MP3Parser.mp3_sampleSize);
-
-                    byteOffset += MP3Parser.mp3_sampleSize;
-                }
-
-                sampleLength = MP3Parser.mp3_sampleSize;
-            }
-
-            sample = MediaStreamSample.CreateFromBuffer(buffer, timeOffSet);
-            sample.Duration = MP3Parser.mp3_sampleDuration;
-            sample.KeyFrame = true;
-
-            timeOffSet = timeOffSet.Add(MP3Parser.mp3_sampleDuration);
-
-
-            return new Tuple<MediaStreamSample, uint>(sample, sampleLength);
-        }
-
-        private async Task<Tuple<MediaStreamSample, uint>> ParseAACSampleAsync(bool partial = false, byte[] partialBytes = null)
-        {
-            if (processingTaskCancel.IsCancellationRequested) return null;
-
-            IBuffer buffer = null;
-            MediaStreamSample sample = null;
-            uint sampleLength = 0;
-
-            if (partial)
-            {
-                buffer = partialBytes.AsBuffer();
-                sampleLength = AAC_ADTSParser.aac_adts_sampleSize - (uint)partialBytes.Length;
-                byteOffset += sampleLength;
-            }
-            else
-            {
-                if (processingTaskCancel.IsCancellationRequested) return null;
-                await socketReader.LoadAsync(AAC_ADTSParser.aac_adts_sampleSize);
-
-                if (processingTaskCancel.IsCancellationRequested) return null;
-
-                buffer = socketReader.ReadBuffer(AAC_ADTSParser.aac_adts_sampleSize);
-
-                byteOffset += AAC_ADTSParser.aac_adts_sampleSize;
-                sampleLength = AAC_ADTSParser.aac_adts_sampleSize;
-            }
-
-            sample = MediaStreamSample.CreateFromBuffer(buffer, timeOffSet);
-            sample.Duration = AAC_ADTSParser.aac_adts_sampleDuration;
-            sample.KeyFrame = true;
-
-            timeOffSet = timeOffSet.Add(AAC_ADTSParser.aac_adts_sampleDuration);
-
-
-            return new Tuple<MediaStreamSample, uint>(sample, sampleLength);
         }
 
         internal MediaStreamSample GetNextSample()
