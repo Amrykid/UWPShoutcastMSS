@@ -51,9 +51,10 @@ namespace UWPShoutcastMSS.Streaming
             if (!isRunning) return;
 
             processingTaskCancel.Cancel();
-            processingTaskCancel.Dispose();
 
             processingTask.Wait();
+
+            processingTaskCancel.Dispose();
 
             isRunning = false;
         }
