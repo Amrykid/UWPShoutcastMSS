@@ -17,7 +17,66 @@ namespace UWPShoutcastMSS.Streaming.Providers
             return AAC_ADTSParser.aac_adts_sampleSize;
         }
 
-        public async Task<Tuple<MediaStreamSample, uint>> ParseSampleAsync(ShoutcastStreamProcessor processor, DataReader socketReader, bool partial = false, byte[] partialBytes = null)
+        public async Task<ServerAudioInfo> GrabFrameInfoAsync(ShoutcastStreamProcessor streamProcessor, DataReader socketReader, ServerAudioInfo serverSentInfo)
+        {
+            ServerAudioInfo audioInfo = new ServerAudioInfo();
+            audioInfo.AudioFormat = StreamAudioFormat.AAC_ADTS;
+
+            //load the first byte
+            await socketReader.LoadAsync(1);
+            byte lastByte = socketReader.ReadByte();
+            streamProcessor.byteOffset += 1;
+            streamProcessor.metadataPos += 1;
+
+            while (true) //wait for frame sync
+            {
+                await socketReader.LoadAsync(1);
+                var curByte = socketReader.ReadByte();
+
+                if (AAC_ADTSParser.IsFrameSync(lastByte, curByte)) //check if we're at the frame sync. if we are, parse some of the audio data
+                {
+                    streamProcessor.byteOffset += 1;
+                    streamProcessor.metadataPos += 1;
+
+                    byte[] header = new byte[AAC_ADTSParser.HeaderLength];
+                    header[0] = lastByte;
+                    header[1] = curByte;
+
+                    await socketReader.LoadAsync(5);
+                    header[2] = socketReader.ReadByte();
+                    header[3] = socketReader.ReadByte();
+                    header[4] = socketReader.ReadByte();
+                    header[5] = socketReader.ReadByte();
+                    header[6] = socketReader.ReadByte();
+                    streamProcessor.byteOffset += 5;
+                    streamProcessor.metadataPos += 5;
+
+                    //todo deal with CRC
+
+                    audioInfo.SampleRate = (uint)AAC_ADTSParser.GetSampleRate(header);
+
+                    audioInfo.ChannelCount = (uint)AAC_ADTSParser.GetChannelCount(header);
+
+                    //bitrate gets sent by the server.
+                    audioInfo.BitRate = serverSentInfo.BitRate;
+                    //audioInfo.BitRate = (uint)AAC_ADTSParser.GetBitRate(header);
+
+                    //if (audioInfo.BitRate == 0) throw new Exception("Unknown bitrate.");
+                    break;
+                }
+                else
+                {
+                    streamProcessor.byteOffset += 1;
+                    streamProcessor.metadataPos += 1;
+                    lastByte = curByte;
+                }
+            }
+
+            return audioInfo;
+        }
+
+        public async Task<Tuple<MediaStreamSample, uint>> ParseSampleAsync(ShoutcastStreamProcessor processor, 
+            DataReader socketReader, bool partial = false, byte[] partialBytes = null)
         {
             IBuffer buffer = null;
             MediaStreamSample sample = null;
@@ -49,6 +108,6 @@ namespace UWPShoutcastMSS.Streaming.Providers
             return new Tuple<MediaStreamSample, uint>(sample, sampleLength);
         }
 
-       
+
     }
 }

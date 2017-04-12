@@ -272,7 +272,7 @@ namespace UWPShoutcastMSS.Parsers.Audio
 
             int value = (int)data;
 
-            int sampleRate = sampleRateTable[value];
+            int sampleRate = value >= sampleRateTable.Length ? 0 : sampleRateTable[value];
 
             return sampleRate;
         }

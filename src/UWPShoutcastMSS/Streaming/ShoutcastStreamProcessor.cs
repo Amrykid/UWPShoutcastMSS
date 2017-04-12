@@ -43,8 +43,6 @@ namespace UWPShoutcastMSS.Streaming
             {
                 metadataPos = 0;
 
-                if (processingTaskCancel.IsCancellationRequested) return;
-
                 await socketReader.LoadAsync(1);
                 uint metaInt = socketReader.ReadByte();
 
@@ -102,14 +100,14 @@ namespace UWPShoutcastMSS.Streaming
 
         internal async Task<MediaStreamSample> GetNextSampleAsync()
         {
-            sampleProvider = AudioProviderFactory.GetAudioProvider(shoutcastStream.AudioInfo.AudioFormat);
+            if (sampleProvider == null)
+                sampleProvider = AudioProviderFactory.GetAudioProvider(shoutcastStream.AudioInfo.AudioFormat);
 
             //todo check for internet connection and socket connection as well
 
             MediaStreamSample sample = null;
             uint sampleLength = 0;
 
-            if (processingTaskCancel.IsCancellationRequested) return null;
 
             //if metadataPos is less than sampleSize away from metadataInt
             if (shoutcastStream.metadataInt - metadataPos <= sampleProvider.GetSampleSize()
@@ -125,10 +123,7 @@ namespace UWPShoutcastMSS.Streaming
 
                 metadataPos += shoutcastStream.metadataInt - metadataPos;
 
-
                 Tuple<MediaStreamSample, uint> result = await sampleProvider.ParseSampleAsync(this, socketReader, partial: true, partialBytes: partialFrame);
-
-
 
                 sample = result.Item1;
                 sampleLength = result.Item2;
@@ -138,8 +133,6 @@ namespace UWPShoutcastMSS.Streaming
                 await HandleMetadata();
 
                 Tuple<MediaStreamSample, uint> result = await sampleProvider.ParseSampleAsync(this, socketReader);
-
-                if (processingTaskCancel.IsCancellationRequested) return null;
 
                 sample = result.Item1;
                 sampleLength = result.Item2;

@@ -13,5 +13,7 @@ namespace UWPShoutcastMSS.Streaming.Providers
         Task<Tuple<MediaStreamSample, uint>> ParseSampleAsync(ShoutcastStreamProcessor processor, DataReader socketReader, bool partial = false, byte[] partialBytes = null);
 
         uint GetSampleSize();
+
+        Task<ServerAudioInfo> GrabFrameInfoAsync(ShoutcastStreamProcessor processor, DataReader socketReader, ServerAudioInfo serverSentInfo);
     }
 }
