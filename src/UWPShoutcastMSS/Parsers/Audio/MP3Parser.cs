@@ -243,6 +243,15 @@ namespace UWPShoutcastMSS.Parsers.Audio
 
             int bitRate = bitRateTable[tableColumn, value];
 
+            if (bitRate > 320)
+            {
+                //its theoretically possible to go higher than 320, but most decoders are only required to support up to 320.
+                // https://hydrogenaud.io/index.php/topic,49009.0.html
+                //this will also guard against incorrect bitrate calculations
+
+                throw new Exception("BitRate out of range or unsupported.");
+            }
+
             return bitRate;
         }
 

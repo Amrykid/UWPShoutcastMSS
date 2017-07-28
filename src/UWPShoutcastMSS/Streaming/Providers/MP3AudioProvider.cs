@@ -59,9 +59,16 @@ namespace UWPShoutcastMSS.Streaming.Providers
                         continue;
                     }
 
-                    uint bitRate = (uint)MP3Parser.GetBitRate(header);
-
-                    audioInfo.BitRate = bitRate;
+                    try
+                    {
+                       audioInfo.BitRate = (uint)MP3Parser.GetBitRate(header);
+                    }
+                    catch (Exception)
+                    {
+                        //bad bit rate
+                        lastByte = curByte;
+                        continue;
+                    }
                     break;
 
                 }
@@ -107,6 +114,6 @@ namespace UWPShoutcastMSS.Streaming.Providers
 
 
             return new Tuple<MediaStreamSample, uint>(sample, sampleLength);
-        }  
+        }
     }
 }
