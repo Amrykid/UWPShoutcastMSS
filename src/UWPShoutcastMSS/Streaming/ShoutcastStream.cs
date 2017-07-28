@@ -118,22 +118,23 @@ namespace UWPShoutcastMSS.Streaming
 
             var provider = AudioProviderFactory.GetAudioProvider(AudioInfo.AudioFormat);
 
-            ServerAudioInfo firstFrame = null;
+            ServerAudioInfo firstFrame = await provider.GrabFrameInfoAsync(streamProcessor, AudioInfo);
+
+            //loop until we receive a few "frames" with identical information.
             while (true)
             {
-                if (firstFrame == null)
-                    firstFrame = await provider.GrabFrameInfoAsync(streamProcessor, AudioInfo);
-
                 ServerAudioInfo secondFrame = await provider.GrabFrameInfoAsync(streamProcessor, AudioInfo);
 
                 if (firstFrame.BitRate == secondFrame.BitRate
                     && firstFrame.SampleRate == secondFrame.SampleRate)
                 {
+                    //both frames are identical, use one of them and escape the loop.
                     AudioInfo = firstFrame;
                     break;
                 }
                 else
                 {
+                    //frames aren't identical, get rid of the first one using the second frame and loop back.
                     firstFrame = secondFrame;
                     continue;
                 }

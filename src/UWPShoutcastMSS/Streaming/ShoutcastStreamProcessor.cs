@@ -157,7 +157,6 @@ namespace UWPShoutcastMSS.Streaming
         internal async Task<byte> ReadByteFromSocketAsync()
         {
             return (await ReadBytesFromSocketAsync(1))[0];
-
         }
 
         internal async Task<byte[]> ReadBytesFromSocketAsync(uint count)

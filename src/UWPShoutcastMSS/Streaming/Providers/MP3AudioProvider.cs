@@ -44,7 +44,8 @@ namespace UWPShoutcastMSS.Streaming.Providers
                     catch (IndexOutOfRangeException)
                     {
                         //bad sample rate
-                        audioInfo.SampleRate = 0;
+                        lastByte = curByte;
+                        continue;
                     }
 
                     try
@@ -54,7 +55,8 @@ namespace UWPShoutcastMSS.Streaming.Providers
                     catch (Exception)
                     {
                         //bad channel count
-                        audioInfo.ChannelCount = 0;
+                        lastByte = curByte;
+                        continue;
                     }
 
                     uint bitRate = (uint)MP3Parser.GetBitRate(header);
