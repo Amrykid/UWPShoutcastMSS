@@ -153,5 +153,27 @@ namespace UWPShoutcastMSS.Streaming
 
             return sample;
         }
+
+        internal async Task<byte> ReadByteFromSocketAsync()
+        {
+            return (await ReadBytesFromSocketAsync(1))[0];
+
+        }
+
+        internal async Task<byte[]> ReadBytesFromSocketAsync(uint count)
+        {
+            await socketReader.LoadAsync(count);
+
+            byte[] result = new byte[count];
+
+            for (int i = 0; i < count; i++)
+            {
+                result[i] = socketReader.ReadByte();
+                byteOffset += 1;
+                metadataPos += 1;
+            }
+
+            return result;
+        }
     }
 }

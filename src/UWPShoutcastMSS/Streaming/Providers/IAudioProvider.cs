@@ -14,6 +14,6 @@ namespace UWPShoutcastMSS.Streaming.Providers
 
         uint GetSampleSize();
 
-        Task<ServerAudioInfo> GrabFrameInfoAsync(ShoutcastStreamProcessor processor, DataReader socketReader, ServerAudioInfo serverSentInfo);
+        Task<ServerAudioInfo> GrabFrameInfoAsync(ShoutcastStreamProcessor processor, ServerAudioInfo serverSentInfo);
     }
 }

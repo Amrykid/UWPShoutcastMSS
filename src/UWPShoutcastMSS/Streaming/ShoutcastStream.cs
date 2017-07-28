@@ -122,9 +122,9 @@ namespace UWPShoutcastMSS.Streaming
             while (true)
             {
                 if (firstFrame == null)
-                    firstFrame = await provider.GrabFrameInfoAsync(streamProcessor, socketReader, AudioInfo);
+                    firstFrame = await provider.GrabFrameInfoAsync(streamProcessor, AudioInfo);
 
-                ServerAudioInfo secondFrame = await provider.GrabFrameInfoAsync(streamProcessor, socketReader, AudioInfo);
+                ServerAudioInfo secondFrame = await provider.GrabFrameInfoAsync(streamProcessor, AudioInfo);
 
                 if (firstFrame.BitRate == secondFrame.BitRate
                     && firstFrame.SampleRate == secondFrame.SampleRate)

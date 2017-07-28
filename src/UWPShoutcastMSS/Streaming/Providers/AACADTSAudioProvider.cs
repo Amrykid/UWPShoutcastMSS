@@ -17,39 +17,26 @@ namespace UWPShoutcastMSS.Streaming.Providers
             return AAC_ADTSParser.aac_adts_sampleSize;
         }
 
-        public async Task<ServerAudioInfo> GrabFrameInfoAsync(ShoutcastStreamProcessor streamProcessor, DataReader socketReader, ServerAudioInfo serverSentInfo)
+        public async Task<ServerAudioInfo> GrabFrameInfoAsync(ShoutcastStreamProcessor processor, ServerAudioInfo serverSentInfo)
         {
             ServerAudioInfo audioInfo = new ServerAudioInfo();
             audioInfo.AudioFormat = StreamAudioFormat.AAC_ADTS;
 
             //load the first byte
-            await socketReader.LoadAsync(1);
-            byte lastByte = socketReader.ReadByte();
-            streamProcessor.byteOffset += 1;
-            streamProcessor.metadataPos += 1;
+            byte lastByte = await processor.ReadByteFromSocketAsync();
 
             while (true) //wait for frame sync
             {
-                await socketReader.LoadAsync(1);
-                var curByte = socketReader.ReadByte();
+                var curByte = await processor.ReadByteFromSocketAsync();
 
                 if (AAC_ADTSParser.IsFrameSync(lastByte, curByte)) //check if we're at the frame sync. if we are, parse some of the audio data
                 {
-                    streamProcessor.byteOffset += 1;
-                    streamProcessor.metadataPos += 1;
-
                     byte[] header = new byte[AAC_ADTSParser.HeaderLength];
                     header[0] = lastByte;
                     header[1] = curByte;
 
-                    await socketReader.LoadAsync(5);
-                    header[2] = socketReader.ReadByte();
-                    header[3] = socketReader.ReadByte();
-                    header[4] = socketReader.ReadByte();
-                    header[5] = socketReader.ReadByte();
-                    header[6] = socketReader.ReadByte();
-                    streamProcessor.byteOffset += 5;
-                    streamProcessor.metadataPos += 5;
+
+                    Array.Copy(await processor.ReadBytesFromSocketAsync(5), 0, header, 2, 5);
 
                     //todo deal with CRC
 
@@ -66,8 +53,6 @@ namespace UWPShoutcastMSS.Streaming.Providers
                 }
                 else
                 {
-                    streamProcessor.byteOffset += 1;
-                    streamProcessor.metadataPos += 1;
                     lastByte = curByte;
                 }
             }
@@ -75,7 +60,7 @@ namespace UWPShoutcastMSS.Streaming.Providers
             return audioInfo;
         }
 
-        public async Task<Tuple<MediaStreamSample, uint>> ParseSampleAsync(ShoutcastStreamProcessor processor, 
+        public async Task<Tuple<MediaStreamSample, uint>> ParseSampleAsync(ShoutcastStreamProcessor processor,
             DataReader socketReader, bool partial = false, byte[] partialBytes = null)
         {
             IBuffer buffer = null;

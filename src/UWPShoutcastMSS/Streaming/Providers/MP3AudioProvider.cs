@@ -17,38 +17,25 @@ namespace UWPShoutcastMSS.Streaming.Providers
             return MP3Parser.mp3_sampleSize;
         }
 
-        public async Task<ServerAudioInfo> GrabFrameInfoAsync(ShoutcastStreamProcessor processor, 
-            DataReader socketReader,
-             ServerAudioInfo serverSentInfo)
+        public async Task<ServerAudioInfo> GrabFrameInfoAsync(ShoutcastStreamProcessor processor, ServerAudioInfo serverSentInfo)
         {
             ServerAudioInfo audioInfo = new ServerAudioInfo();
             audioInfo.AudioFormat = StreamAudioFormat.MP3;
 
             //load the first byte
-            await socketReader.LoadAsync(1);
-            byte lastByte = socketReader.ReadByte();
-            processor.byteOffset += 1;
-            processor.metadataPos += 1;
+            byte lastByte = await processor.ReadByteFromSocketAsync();
 
             while (true) //wait for frame sync
             {
-                await socketReader.LoadAsync(1);
-                var curByte = socketReader.ReadByte();
+                var curByte = await processor.ReadByteFromSocketAsync();
 
                 if (MP3Parser.IsFrameSync(lastByte, curByte)) //check if we're at the frame sync. if we are, parse some of the audio data
                 {
-                    processor.byteOffset += 1;
-                    processor.metadataPos += 1;
-
                     byte[] header = new byte[MP3Parser.HeaderLength];
                     header[0] = lastByte;
                     header[1] = curByte;
 
-                    await socketReader.LoadAsync(2);
-                    header[2] = socketReader.ReadByte();
-                    header[3] = socketReader.ReadByte();
-                    processor.byteOffset += 2;
-                    processor.metadataPos += 2;
+                    Array.Copy(await processor.ReadBytesFromSocketAsync(2), 0, header, 2, 2);
 
                     try
                     {
@@ -78,8 +65,6 @@ namespace UWPShoutcastMSS.Streaming.Providers
                 }
                 else
                 {
-                    processor.byteOffset += 1;
-                    processor.metadataPos += 1;
                     lastByte = curByte;
                 }
             }
@@ -105,14 +90,7 @@ namespace UWPShoutcastMSS.Streaming.Providers
             {
                 var read = await socketReader.LoadAsync(MP3Parser.mp3_sampleSize);
 
-                if (read < MP3Parser.mp3_sampleSize)
-                {
-                    buffer = socketReader.ReadBuffer(read);
-                }
-                else
-                {
-                    buffer = socketReader.ReadBuffer(MP3Parser.mp3_sampleSize);
-                }
+                buffer = socketReader.ReadBuffer(read < MP3Parser.mp3_sampleSize ? read : MP3Parser.mp3_sampleSize);
 
                 processor.byteOffset += MP3Parser.mp3_sampleSize;
 
