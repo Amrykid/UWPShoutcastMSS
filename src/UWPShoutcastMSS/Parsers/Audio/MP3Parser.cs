@@ -17,27 +17,40 @@ namespace UWPShoutcastMSS.Parsers.Audio
 
         //Reference: https://www.mp3-tech.org/programmer/frame_header.html
 
-        public static readonly byte[] FrameSync = new byte[] { (byte)255, (byte)7 }; //11 bits - ADTS sync bits.
+        public static readonly byte[] FrameSync = new byte[] {
+            // hexadecimal: 1 2 3 4 5 6 7 8 9 A|10 B|11 C|12 D|13 E|14 F|15
+
+            //0xFF where F = 15 -> (F * 16^1) + (F * 16^0) = 255
+            (byte)0xFF,
+            //0xE0 where E = 14 -> (E * 16^1) + (0 * 16^0) = 224. in 224, the first three bits are 1 and the rest are 0: 1110000
+            (byte)0xE0,
+        }; //11 bits - sync bits.
         public const int HeaderLength = 4;
         //public const int HeaderLengthWithCRC = 9;
 
         public static bool IsFrameSync(byte firstByte, byte secondByte)
         {
             //AAAAAAAA AAABBCCD EEEEFFGH IIJJKLMM 
-            bool testOne = firstByte == FrameSync[0] && (secondByte >> 5) == FrameSync[1]; //matches the frame sync bits
 
+            bool firstByteIs255 = firstByte == FrameSync[0];
 
-            bool testTwo = false; //test audio version data
-            byte testTwoByte = (byte)(secondByte << 3);
-            testTwoByte = (byte)(testTwoByte >> 6);
-            testTwo = testTwoByte != (byte)1 && testTwoByte < 4; //make sure we're not using a "reserved" mpeg audio version
+            if (firstByteIs255)
+            {
+                return (secondByte & FrameSync[1]) >= FrameSync[1];
+            }
 
-            bool testThree = false; //test audio layer data
-            byte testThreeByte = (byte)(secondByte << 5);
-            testThreeByte = (byte)(testThreeByte >> 6);
-            testThree = testThreeByte != (byte)0 && testThreeByte < 4; //make sure we're not using a "reserved" mpeg audio layer
+            return false;
+        }
 
-            return testOne && testTwo && testThree;
+        public static bool IsValidHeader(byte[] header)
+        {
+            if (header[1] <= 0xE0) return false;
+            if (GetMPEGAudioVersion(header) == double.NaN) return false;
+            if (GetMPEGAudioLayer(header) <= 0) return false;
+            if (GetBitRate(header) <= 0) return false;
+            if (GetSampleRate(header) <= 0) return false;
+
+            return true;
         }
 
         public static double GetMPEGAudioVersion(byte[] header)
@@ -65,7 +78,7 @@ namespace UWPShoutcastMSS.Parsers.Audio
                 case 0:
                     return 2.5; //MPEG v2.5
                 default:
-                    throw new Exception("Reserved or unknown version.");
+                    return double.NaN; //Reserved or unknown version.
             }
         }
 
@@ -93,7 +106,7 @@ namespace UWPShoutcastMSS.Parsers.Audio
                 case 3:
                     return 1; //layer 1
                 default:
-                    throw new Exception("Reserved or unknown version.");
+                    return 0;
             }
         }
 
@@ -230,7 +243,7 @@ namespace UWPShoutcastMSS.Parsers.Audio
                 }
                 else
                 {
-                    throw new Exception("Unknown MPEG layer.");
+                    return -2; //Unknown MPEG layer.
                 }
             }
 
@@ -249,7 +262,8 @@ namespace UWPShoutcastMSS.Parsers.Audio
                 // https://hydrogenaud.io/index.php/topic,49009.0.html
                 //this will also guard against incorrect bitrate calculations
 
-                throw new Exception("BitRate out of range or unsupported.");
+                //throw new Exception("BitRate out of range or unsupported.");
+                return -2;
             }
 
             return bitRate;
@@ -281,7 +295,9 @@ namespace UWPShoutcastMSS.Parsers.Audio
 
             int value = (int)data;
 
-            int sampleRate = value >= sampleRateTable.Length ? 0 : sampleRateTable[value];
+            if (data == 0x3) return -2; //reserved sample rate. bad
+
+            int sampleRate = sampleRateTable[value];
 
             return sampleRate;
         }

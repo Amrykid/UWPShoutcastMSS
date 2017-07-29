@@ -37,27 +37,31 @@ namespace UWPShoutcastMSS.Streaming
 
         }
 
-        private async Task HandleMetadata()
+        private async Task HandleMetadataAsync()
         {
             if (metadataPos == shoutcastStream.metadataInt)
             {
                 metadataPos = 0;
 
                 await socketReader.LoadAsync(1);
-                uint metaInt = socketReader.ReadByte();
 
-                if (metaInt > 0)
+                if (socketReader.UnconsumedBufferLength > 0)
                 {
-                    uint metaDataInfo = metaInt * 16;
+                    uint metaInt = socketReader.ReadByte();
 
-                    await socketReader.LoadAsync((uint)metaDataInfo);
+                    if (metaInt > 0)
+                    {
+                        uint metaDataInfo = metaInt * 16;
 
-                    var metadata = socketReader.ReadString((uint)metaDataInfo);
+                        await socketReader.LoadAsync((uint)metaDataInfo);
 
-                    ParseSongMetadata(metadata);
+                        var metadata = socketReader.ReadString((uint)metaDataInfo);
+
+                        ParseSongMetadata(metadata);
+                    }
+
+                    byteOffset = 0;
                 }
-
-                byteOffset = 0;
             }
         }
 
@@ -130,7 +134,7 @@ namespace UWPShoutcastMSS.Streaming
             }
             else
             {
-                await HandleMetadata();
+                await HandleMetadataAsync();
 
                 Tuple<MediaStreamSample, uint> result = await sampleProvider.ParseSampleAsync(this, socketReader);
 

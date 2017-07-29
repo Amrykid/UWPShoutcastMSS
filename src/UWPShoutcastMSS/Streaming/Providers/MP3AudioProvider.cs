@@ -37,46 +37,33 @@ namespace UWPShoutcastMSS.Streaming.Providers
 
                     Array.Copy(await processor.ReadBytesFromSocketAsync(2), 0, header, 2, 2);
 
-                    try
+                    if (!MP3Parser.IsValidHeader(header))
+                    {
+                        lastByte = header[3];
+                        continue;
+                    }
+                    else
                     {
                         audioInfo.SampleRate = (uint)MP3Parser.GetSampleRate(header);
-                    }
-                    catch (IndexOutOfRangeException)
-                    {
-                        //bad sample rate
-                        lastByte = curByte;
-                        continue;
-                    }
-
-                    try
-                    {
                         audioInfo.ChannelCount = (uint)MP3Parser.GetChannelCount(header);
+                        audioInfo.BitRate = (uint)MP3Parser.GetBitRate(header);
+                        audioInfo.HeaderData = header;
+                        break;
                     }
-                    catch (Exception)
-                    {
-                        //bad channel count
-                        lastByte = curByte;
-                        continue;
-                    }
-
-                    try
-                    {
-                       audioInfo.BitRate = (uint)MP3Parser.GetBitRate(header);
-                    }
-                    catch (Exception)
-                    {
-                        //bad bit rate
-                        lastByte = curByte;
-                        continue;
-                    }
-                    break;
-
                 }
                 else
                 {
                     lastByte = curByte;
                 }
             }
+
+            if (audioInfo.BitRate == 4294967294)
+            {
+
+                //if this gets hit, abort mission immediately.
+                throw new ArithmeticException();
+            }
+
 
             return audioInfo;
         }

@@ -1886,7 +1886,7 @@
       },
       "UWPShoutcastMSS/1.0.0": {
         "type": "project",
-        "framework": "UAP,Version=v10.0",
+        "framework": "Unsupported,Version=v0.0",
         "dependencies": {
           "Microsoft.NETCore.UniversalWindowsPlatform": "5.0.0"
         }
@@ -3634,7 +3634,7 @@
       },
       "UWPShoutcastMSS/1.0.0": {
         "type": "project",
-        "framework": "UAP,Version=v10.0",
+        "framework": "Unsupported,Version=v0.0",
         "dependencies": {
           "Microsoft.NETCore.UniversalWindowsPlatform": "5.0.0"
         }
@@ -5345,7 +5345,7 @@
       },
       "UWPShoutcastMSS/1.0.0": {
         "type": "project",
-        "framework": "UAP,Version=v10.0",
+        "framework": "Unsupported,Version=v0.0",
         "dependencies": {
           "Microsoft.NETCore.UniversalWindowsPlatform": "5.0.0"
         }
@@ -7100,7 +7100,7 @@
       },
       "UWPShoutcastMSS/1.0.0": {
         "type": "project",
-        "framework": "UAP,Version=v10.0",
+        "framework": "Unsupported,Version=v0.0",
         "dependencies": {
           "Microsoft.NETCore.UniversalWindowsPlatform": "5.0.0"
         }
@@ -8811,7 +8811,7 @@
       },
       "UWPShoutcastMSS/1.0.0": {
         "type": "project",
-        "framework": "UAP,Version=v10.0",
+        "framework": "Unsupported,Version=v0.0",
         "dependencies": {
           "Microsoft.NETCore.UniversalWindowsPlatform": "5.0.0"
         }
@@ -10566,7 +10566,7 @@
       },
       "UWPShoutcastMSS/1.0.0": {
         "type": "project",
-        "framework": "UAP,Version=v10.0",
+        "framework": "Unsupported,Version=v0.0",
         "dependencies": {
           "Microsoft.NETCore.UniversalWindowsPlatform": "5.0.0"
         }
@@ -12277,7 +12277,7 @@
       },
       "UWPShoutcastMSS/1.0.0": {
         "type": "project",
-        "framework": "UAP,Version=v10.0",
+        "framework": "Unsupported,Version=v0.0",
         "dependencies": {
           "Microsoft.NETCore.UniversalWindowsPlatform": "5.0.0"
         }
@@ -15529,7 +15529,7 @@
     },
     "UWPShoutcastMSS/1.0.0": {
       "type": "project",
-      "path": "../UWPShoutcastMSS/project.json",
+      "path": "../UWPShoutcastMSS/UWPShoutcastMSS.csproj",
       "msbuildProject": "../UWPShoutcastMSS/UWPShoutcastMSS.csproj"
     }
   },
