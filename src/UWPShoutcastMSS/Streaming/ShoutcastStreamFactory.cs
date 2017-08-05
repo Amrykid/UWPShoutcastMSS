@@ -39,7 +39,7 @@ namespace UWPShoutcastMSS.Streaming
 
             //build a http request
             StringBuilder requestBuilder = new StringBuilder();
-            requestBuilder.AppendLine("GET " + serverUrl.LocalPath + " HTTP/1.1");
+            requestBuilder.AppendLine("GET " + serverUrl.LocalPath + settings.RelativePath +" HTTP/1.1");
             requestBuilder.AppendLine("Icy-MetaData: 1");
             requestBuilder.AppendLine("Host: " + serverUrl.Host + (serverUrl.Port != 80 ? ":" + serverUrl.Port : ""));
             requestBuilder.AppendLine("Connection: Keep-Alive");
@@ -67,6 +67,8 @@ namespace UWPShoutcastMSS.Streaming
             if (string.IsNullOrWhiteSpace(httpLine)) throw new InvalidOperationException("httpLine is null or whitespace");
 
             var action = ParseHttpCode(httpLine, response, shoutStream);
+
+            //todo handle when we get a text/html page.
 
             switch (action.ActionType)
             {
@@ -104,6 +106,7 @@ namespace UWPShoutcastMSS.Streaming
                         switch (statusCode)
                         {
                             case 200: return ConnectionAction.FromSuccess();
+                            case 404: return ConnectionAction.FromFailure();
                         }
                     }
                     break;
@@ -163,6 +166,16 @@ namespace UWPShoutcastMSS.Streaming
             public Exception ActionException { get; set; }
 
             public static ConnectionAction FromSuccess() { return new ConnectionAction() { ActionType = ConnectionActionType.Success }; }
+
+            public static ConnectionAction FromFailure()
+            {
+                return FromFailure(null);
+            }
+
+            public static ConnectionAction FromFailure(Exception exception)
+            {
+                return new ConnectionAction() { ActionType = ConnectionActionType.Fail, ActionException = exception };
+            }
         }
         internal enum ConnectionActionType
         {
