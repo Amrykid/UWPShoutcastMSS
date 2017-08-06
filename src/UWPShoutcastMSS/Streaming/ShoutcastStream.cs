@@ -209,9 +209,9 @@ namespace UWPShoutcastMSS.Streaming
         {
             if (lastPauseTime != null)
             {
-                if (DateTime.Now.Subtract(lastPauseTime.Value) > TimeSpan.FromSeconds(30))
+                if (DateTime.Now.Subtract(lastPauseTime.Value) > TimeSpan.FromMinutes(3))
                 {
-                    //if its been longer than 30 seconds, the stream is stale and the likely to break. reconnect.
+                    //if its been longer than 3 minutes, the stream is stale and the likely to break. reconnect.
                     var deferral = args.Request.GetDeferral();
                     DisconnectSockets();
                     await ReconnectSocketsAsync();
