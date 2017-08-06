@@ -19,20 +19,26 @@ namespace UWPShoutcastMSS.Streaming
         public MediaStreamSource MediaStreamSource { get; private set; }
 
         public event EventHandler<ShoutcastMediaSourceStreamMetadataChangedEventArgs> MetadataChanged;
+        public event EventHandler Reconnected;
 
         private ShoutcastStreamProcessor streamProcessor = null;
         internal uint metadataInt = 100;
         private StreamSocket socket;
         private DataReader socketReader;
         private DataWriter socketWriter;
+        private Uri serverUrl;
+        private ShoutcastStreamFactoryConnectionSettings serverSettings;
         private ShoutcastServerType serverType;
         private AudioEncodingProperties audioProperties = null;
+        private DateTime? lastPauseTime = null;
 
-        internal ShoutcastStream(StreamSocket socket, DataReader socketReader, DataWriter socketWriter)
+        internal ShoutcastStream(Uri serverUrl, ShoutcastStreamFactoryConnectionSettings settings, StreamSocket socket, DataReader socketReader, DataWriter socketWriter)
         {
             this.socket = socket;
             this.socketReader = socketReader;
             this.socketWriter = socketWriter;
+            this.serverUrl = serverUrl;
+            this.serverSettings = settings;
 
             StationInfo = new ServerStationInfo();
             AudioInfo = new ServerAudioInfo();
@@ -188,12 +194,63 @@ namespace UWPShoutcastMSS.Streaming
 
             var audioStreamDescriptor = new AudioStreamDescriptor(audioProperties);
             MediaStreamSource = new MediaStreamSource(audioStreamDescriptor);
+            MediaStreamSource.Paused += MediaStreamSource_Paused;
+            MediaStreamSource.Starting += MediaStreamSource_Starting;
+            MediaStreamSource.Closed += MediaStreamSource_Closed;
             MediaStreamSource.SampleRequested += MediaStreamSource_SampleRequested;
+        }
+
+        private void MediaStreamSource_Closed(MediaStreamSource sender, MediaStreamSourceClosedEventArgs args)
+        {
+            //todo needs to be handled.
+        }
+
+        private async void MediaStreamSource_Starting(MediaStreamSource sender, MediaStreamSourceStartingEventArgs args)
+        {
+            if (lastPauseTime != null)
+            {
+                if (DateTime.Now.Subtract(lastPauseTime.Value) > TimeSpan.FromSeconds(30))
+                {
+                    //if its been longer than 30 seconds, the stream is stale and the likely to break. reconnect.
+                    var deferral = args.Request.GetDeferral();
+                    DisconnectSockets();
+                    await ReconnectSocketsAsync();
+                    Reconnected?.Invoke(this, EventArgs.Empty);
+                    lastPauseTime = null;
+                    deferral.Complete();
+                }
+            }
+        }
+
+        private void MediaStreamSource_Paused(MediaStreamSource sender, object args)
+        {
+            lastPauseTime = DateTime.Now;
+        }
+
+        private async Task ReconnectSocketsAsync()
+        {
+            var result = await ShoutcastStreamFactory.ConnectInternalAsync(serverUrl,
+                serverSettings);
+
+            this.socket = result.socket;
+            this.socketReader = result.socketReader;
+            this.socketWriter = result.socketWriter;
+
+            streamProcessor = new ShoutcastStreamProcessor(this, socket, socketReader, socketWriter);
         }
 
         public void Disconnect()
         {
+            MediaStreamSource.Starting -= MediaStreamSource_Starting;
+            MediaStreamSource.Closed -= MediaStreamSource_Closed;
+            MediaStreamSource.Paused -= MediaStreamSource_Paused;
             MediaStreamSource.SampleRequested -= MediaStreamSource_SampleRequested;
+            DisconnectSockets();
+        }
+
+        private void DisconnectSockets()
+        {
+            streamProcessor = null;
 
             socketWriter.Dispose();
             socketReader.Dispose();

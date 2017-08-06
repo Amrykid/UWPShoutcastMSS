@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using System.Net.Http;
-using System.Threading;
 using Windows.Networking.Sockets;
 using Windows.Storage.Streams;
 
@@ -12,7 +10,59 @@ namespace UWPShoutcastMSS.Streaming
 {
     public static class ShoutcastStreamFactory
     {
+        internal struct ShoutcastStreamFactoryInternalConnectResult
+        {
+            internal StreamSocket socket;
+            internal DataWriter socketWriter;
+            internal DataReader socketReader;
+            internal string httpResponse;
+        }
+
+
         public const string DefaultUserAgent = "Shoutcast Player (http://github.com/Amrykid/UWPShoutcastMSS)";
+
+
+        internal static async Task<ShoutcastStreamFactoryInternalConnectResult> ConnectInternalAsync(Uri serverUrl,
+            ShoutcastStreamFactoryConnectionSettings settings)
+        {
+            //abstracted the connection bit to allow for reconnecting from the ShoutcastStream object.
+
+            ShoutcastStreamFactoryInternalConnectResult result = new ShoutcastStreamFactoryInternalConnectResult();
+
+            result.socket = new StreamSocket();
+
+            await result.socket.ConnectAsync(new Windows.Networking.HostName(serverUrl.Host), serverUrl.Port.ToString());
+
+            result.socketWriter = new DataWriter(result.socket.OutputStream);
+            result.socketReader = new DataReader(result.socket.InputStream);
+
+            //build a http request
+            StringBuilder requestBuilder = new StringBuilder();
+            requestBuilder.AppendLine("GET " + serverUrl.LocalPath + settings.RelativePath + " HTTP/1.1");
+            requestBuilder.AppendLine("Icy-MetaData: 1");
+            requestBuilder.AppendLine("Host: " + serverUrl.Host + (serverUrl.Port != 80 ? ":" + serverUrl.Port : ""));
+            requestBuilder.AppendLine("Connection: Keep-Alive");
+            requestBuilder.AppendLine("User-Agent: " + settings.UserAgent);
+            requestBuilder.AppendLine();
+
+            //send the http request
+            result.socketWriter.WriteString(requestBuilder.ToString());
+            await result.socketWriter.StoreAsync();
+            await result.socketWriter.FlushAsync();
+
+            //start reading the headers from the response
+            string response = string.Empty;
+            while (!response.EndsWith(Environment.NewLine + Environment.NewLine))
+            //loop until we get the double line-ending signifying the end of the headers
+            {
+                await result.socketReader.LoadAsync(1);
+                response += result.socketReader.ReadString(1);
+            }
+
+            result.httpResponse = response;
+
+            return result;
+        }
 
         public static Task<ShoutcastStream> ConnectAsync(Uri serverUrl)
         {
@@ -26,54 +76,24 @@ namespace UWPShoutcastMSS.Streaming
         {
             //http://www.smackfu.com/stuff/programming/shoutcast.html
 
-            StreamSocket socket = new StreamSocket();
-            DataWriter socketWriter = null;
-            DataReader socketReader = null;
-
             ShoutcastStream shoutStream = null;
 
-            await socket.ConnectAsync(new Windows.Networking.HostName(serverUrl.Host), serverUrl.Port.ToString());
+            ShoutcastStreamFactoryInternalConnectResult result = await ConnectInternalAsync(serverUrl, settings);
 
-            socketWriter = new DataWriter(socket.OutputStream);
-            socketReader = new DataReader(socket.InputStream);
+            shoutStream = new ShoutcastStream(serverUrl, settings, result.socket, result.socketReader, result.socketWriter);
 
-            //build a http request
-            StringBuilder requestBuilder = new StringBuilder();
-            requestBuilder.AppendLine("GET " + serverUrl.LocalPath + settings.RelativePath +" HTTP/1.1");
-            requestBuilder.AppendLine("Icy-MetaData: 1");
-            requestBuilder.AppendLine("Host: " + serverUrl.Host + (serverUrl.Port != 80 ? ":" + serverUrl.Port : ""));
-            requestBuilder.AppendLine("Connection: Keep-Alive");
-            requestBuilder.AppendLine("User-Agent: " + settings.UserAgent);
-            requestBuilder.AppendLine();
-
-            //send the http request
-            socketWriter.WriteString(requestBuilder.ToString());
-            await socketWriter.StoreAsync();
-            await socketWriter.FlushAsync();
-
-            //start reading the headers from the response
-            string response = string.Empty;
-            while (!response.EndsWith(Environment.NewLine + Environment.NewLine))
-            //loop until we get the double line-ending signifying the end of the headers
-            {
-                await socketReader.LoadAsync(1);
-                response += socketReader.ReadString(1);
-            }
-
-            shoutStream = new ShoutcastStream(socket, socketReader, socketWriter);
-
-            string httpLine = response.Substring(0, response.IndexOf('\n')).Trim();
+            string httpLine = result.httpResponse.Substring(0, result.httpResponse.IndexOf('\n')).Trim();
 
             if (string.IsNullOrWhiteSpace(httpLine)) throw new InvalidOperationException("httpLine is null or whitespace");
 
-            var action = ParseHttpCode(httpLine, response, shoutStream);
+            var action = ParseHttpCode(httpLine, result.httpResponse, shoutStream);
 
             //todo handle when we get a text/html page.
 
             switch (action.ActionType)
             {
                 case ConnectionActionType.Success:
-                    var headers = ParseResponse(response, shoutStream);
+                    var headers = ParseResponse(result.httpResponse, shoutStream);
                     await shoutStream.HandleHeadersAsync(headers);
                     return shoutStream;
                 case ConnectionActionType.Fail:
