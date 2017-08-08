@@ -40,15 +40,24 @@ namespace UWPShoutcastMSS.Streaming.Providers
 
                     //todo deal with CRC
 
-                    audioInfo.SampleRate = (uint)AAC_ADTSParser.GetSampleRate(header);
+                    try
+                    {
+                        audioInfo.SampleRate = (uint)AAC_ADTSParser.GetSampleRate(header);
 
-                    audioInfo.ChannelCount = (uint)AAC_ADTSParser.GetChannelCount(header);
+                        audioInfo.ChannelCount = (uint)AAC_ADTSParser.GetChannelCount(header);
 
-                    //bitrate gets sent by the server.
-                    audioInfo.BitRate = serverSentInfo.BitRate;
-                    //audioInfo.BitRate = (uint)AAC_ADTSParser.GetBitRate(header);
+                        //bitrate gets sent by the server.
+                        audioInfo.BitRate = serverSentInfo.BitRate;
+                        //audioInfo.BitRate = (uint)AAC_ADTSParser.GetBitRate(header);
 
-                    //if (audioInfo.BitRate == 0) throw new Exception("Unknown bitrate.");
+                        //if (audioInfo.BitRate == 0) throw new Exception("Unknown bitrate.");
+                    }
+                    catch (IndexOutOfRangeException)
+                    {
+                        //probably not the header. continue.
+                        lastByte = curByte;
+                        continue;
+                    }
                     break;
                 }
                 else
