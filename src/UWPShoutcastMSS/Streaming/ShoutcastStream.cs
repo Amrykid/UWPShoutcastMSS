@@ -254,10 +254,7 @@ namespace UWPShoutcastMSS.Streaming
 
             try
             {
-                var sample = await streamProcessor.GetNextSampleAsync();
-
-                if (sample != null)
-                    request.Sample = sample;
+                await ReadSampleAsync(request);
             }
             catch (COMException ex)
             {
@@ -267,14 +264,19 @@ namespace UWPShoutcastMSS.Streaming
                 await ReconnectSocketsAsync();
                 Reconnected?.Invoke(this, EventArgs.Empty);
 
-                var sample = await streamProcessor.GetNextSampleAsync();
-
-                if (sample != null)
-                    request.Sample = sample;
+                await ReadSampleAsync(request);
             }
 
 
             deferral.Complete();
+        }
+
+        private async Task ReadSampleAsync(MediaStreamSourceSampleRequest request)
+        {
+            var sample = await streamProcessor.GetNextSampleAsync();
+
+            if (sample != null)
+                request.Sample = sample;
         }
 
         public void Dispose()
