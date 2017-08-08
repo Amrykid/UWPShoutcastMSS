@@ -60,6 +60,9 @@ namespace UWPShoutcastMSS.Streaming.Providers
             return audioInfo;
         }
 
+        public StreamAudioFormat AudioFormat => StreamAudioFormat.AAC_ADTS;
+        public uint HeaderLength => AAC_ADTSParser.HeaderLength;
+
         public async Task<Tuple<MediaStreamSample, uint>> ParseSampleAsync(ShoutcastStreamProcessor processor,
             DataReader socketReader, bool partial = false, byte[] partialBytes = null)
         {

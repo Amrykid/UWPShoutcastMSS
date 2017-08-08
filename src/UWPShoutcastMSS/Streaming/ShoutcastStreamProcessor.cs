@@ -118,29 +118,20 @@ namespace UWPShoutcastMSS.Streaming
                 && shoutcastStream.metadataInt - metadataPos > 0)
             {
                 //parse part of the frame.
-
                 byte[] partialFrame = new byte[shoutcastStream.metadataInt - metadataPos];
-
                 var read = await socketReader.LoadAsync(shoutcastStream.metadataInt - metadataPos);
-
                 socketReader.ReadBytes(partialFrame);
-
                 metadataPos += shoutcastStream.metadataInt - metadataPos;
-
                 Tuple<MediaStreamSample, uint> result = await sampleProvider.ParseSampleAsync(this, socketReader, partial: true, partialBytes: partialFrame);
-
                 sample = result.Item1;
                 sampleLength = result.Item2;
             }
             else
             {
                 await HandleMetadataAsync();
-
                 Tuple<MediaStreamSample, uint> result = await sampleProvider.ParseSampleAsync(this, socketReader);
-
                 sample = result.Item1;
                 sampleLength = result.Item2;
-
 
                 if (sample == null || sampleLength == 0) //OLD bug: on RELEASE builds, sample.Buffer causes the app to die due to a possible .NET Native bug
                 {

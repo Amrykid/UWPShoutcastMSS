@@ -9,6 +9,7 @@ using Windows.Storage.Streams;
 using Windows.Media.Core;
 using System.Runtime.InteropServices.WindowsRuntime;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 
 namespace UWPShoutcastMSS.Streaming
 {
@@ -205,21 +206,9 @@ namespace UWPShoutcastMSS.Streaming
             //todo needs to be handled.
         }
 
-        private async void MediaStreamSource_Starting(MediaStreamSource sender, MediaStreamSourceStartingEventArgs args)
+        private void MediaStreamSource_Starting(MediaStreamSource sender, MediaStreamSourceStartingEventArgs args)
         {
-            if (lastPauseTime != null)
-            {
-                if (DateTime.Now.Subtract(lastPauseTime.Value) > TimeSpan.FromMinutes(3))
-                {
-                    //if its been longer than 3 minutes, the stream is stale and the likely to break. reconnect.
-                    var deferral = args.Request.GetDeferral();
-                    DisconnectSockets();
-                    await ReconnectSocketsAsync();
-                    Reconnected?.Invoke(this, EventArgs.Empty);
-                    lastPauseTime = null;
-                    deferral.Complete();
-                }
-            }
+            lastPauseTime = null;
         }
 
         private void MediaStreamSource_Paused(MediaStreamSource sender, object args)
@@ -261,12 +250,28 @@ namespace UWPShoutcastMSS.Streaming
         private async void MediaStreamSource_SampleRequested(MediaStreamSource sender, MediaStreamSourceSampleRequestedEventArgs args)
         {
             var request = args.Request;
-
             var deferral = request.GetDeferral();
-            var sample = await streamProcessor.GetNextSampleAsync();
 
-            if (sample != null)
-                request.Sample = sample;
+            try
+            {
+                var sample = await streamProcessor.GetNextSampleAsync();
+
+                if (sample != null)
+                    request.Sample = sample;
+            }
+            catch (COMException ex)
+            {
+                //Usually this is thrown when we get disconnected because of inactivity.
+                //Reset and reconnect.
+                DisconnectSockets();
+                await ReconnectSocketsAsync();
+                Reconnected?.Invoke(this, EventArgs.Empty);
+
+                var sample = await streamProcessor.GetNextSampleAsync();
+
+                if (sample != null)
+                    request.Sample = sample;
+            }
 
 
             deferral.Complete();

@@ -102,5 +102,8 @@ namespace UWPShoutcastMSS.Streaming.Providers
 
             return new Tuple<MediaStreamSample, uint>(sample, sampleLength);
         }
+
+        public StreamAudioFormat AudioFormat => StreamAudioFormat.MP3;
+        public uint HeaderLength => MP3Parser.HeaderLength;
     }
 }
