@@ -230,10 +230,18 @@ namespace UWPShoutcastMSS.Streaming
 
         public void Disconnect()
         {
-            MediaStreamSource.Starting -= MediaStreamSource_Starting;
-            MediaStreamSource.Closed -= MediaStreamSource_Closed;
-            MediaStreamSource.Paused -= MediaStreamSource_Paused;
-            MediaStreamSource.SampleRequested -= MediaStreamSource_SampleRequested;
+            try
+            {
+                MediaStreamSource.Starting -= MediaStreamSource_Starting;
+                MediaStreamSource.Closed -= MediaStreamSource_Closed;
+                MediaStreamSource.Paused -= MediaStreamSource_Paused;
+                MediaStreamSource.SampleRequested -= MediaStreamSource_SampleRequested;
+            }
+            catch (ArgumentException)
+            {
+                //Event handlers must have been disconnected already. Continue anyway.
+            }
+
             DisconnectSockets();
         }
 
@@ -241,7 +249,9 @@ namespace UWPShoutcastMSS.Streaming
         {
             streamProcessor = null;
 
+            socketWriter.DetachStream();
             socketWriter.Dispose();
+            socketReader.DetachStream();
             socketReader.Dispose();
 
             socket.Dispose();

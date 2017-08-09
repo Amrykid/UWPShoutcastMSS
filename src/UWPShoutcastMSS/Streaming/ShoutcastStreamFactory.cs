@@ -86,7 +86,7 @@ namespace UWPShoutcastMSS.Streaming
 
             if (string.IsNullOrWhiteSpace(httpLine)) throw new InvalidOperationException("httpLine is null or whitespace");
 
-            var action = ParseHttpCode(httpLine, result.httpResponse, shoutStream);
+            var action = ParseHttpCodeAndResponse(httpLine, result.httpResponse, shoutStream);
 
             //todo handle when we get a text/html page.
 
@@ -98,17 +98,27 @@ namespace UWPShoutcastMSS.Streaming
                     return shoutStream;
                 case ConnectionActionType.Fail:
                     throw action.ActionException;
+                case ConnectionActionType.Redirect:
+                    {
+                        //clean up.
+                        shoutStream.Dispose();
+
+                        return await ConnectAsync(action.ActionUrl, settings); 
+                    }
                 default:
                     throw new Exception("We weren't able to connect for some reason.");
             }
         }
 
-        private static ConnectionAction ParseHttpCode(string httpLine, string response, ShoutcastStream shoutStream)
+        private static ConnectionAction ParseHttpCodeAndResponse(string httpLine, string response, ShoutcastStream shoutStream)
         {
             var bits = httpLine.Split(new char[] { ' ' }, 3);
 
             var protocolBit = bits[0].ToUpper(); //always 'HTTP' or 'ICY
             int statusCode = int.Parse(bits[1]);
+
+            string[] responseSplitByLine = response.Split(new string[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries);
+            KeyValuePair<string, string>[] headers = ParseHttpResponseToKeyPairArray(responseSplitByLine);
 
             switch (protocolBit)
             {
@@ -127,6 +137,20 @@ namespace UWPShoutcastMSS.Streaming
                         {
                             case 200: return ConnectionAction.FromSuccess();
                             case 404: return ConnectionAction.FromFailure();
+                            case 302: //Found. Has the new location in the LOCATION header.
+                                {
+                                    var newLocation = headers.FirstOrDefault(x => x.Key.ToUpper().Equals("LOCATION"));
+                                    if (!string.IsNullOrWhiteSpace(newLocation.Value))
+                                    {
+                                        //We need to connect to this url instead. Throw it back to the top.
+                                        return new ConnectionAction() { ActionType = ConnectionActionType.Redirect,
+                                            ActionUrl = new Uri(newLocation.Value) };
+                                    }
+                                    else
+                                    {
+                                        return ConnectionAction.FromFailure();
+                                    }
+                                }
                         }
                     }
                     break;
@@ -199,7 +223,8 @@ namespace UWPShoutcastMSS.Streaming
         }
         internal enum ConnectionActionType
         {
-            Fail = 0,
+            None = 0,
+            Fail = -1,
             Success = 1,
             Redirect = 2
         }
