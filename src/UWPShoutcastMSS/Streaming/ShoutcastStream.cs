@@ -261,7 +261,7 @@ namespace UWPShoutcastMSS.Streaming
         {
             var request = args.Request;
             var deferral = request.GetDeferral();
-
+            bool connected = true;
             try
             {
                 await ReadSampleAsync(request);
@@ -271,10 +271,22 @@ namespace UWPShoutcastMSS.Streaming
                 //Usually this is thrown when we get disconnected because of inactivity.
                 //Reset and reconnect.
                 DisconnectSockets();
-                await ReconnectSocketsAsync();
-                Reconnected?.Invoke(this, EventArgs.Empty);
+                connected = false;
+            }
 
-                await ReadSampleAsync(request);
+            if (!connected)
+            {
+                try
+                {
+                    await ReconnectSocketsAsync();
+                    Reconnected?.Invoke(this, EventArgs.Empty);
+
+                    await ReadSampleAsync(request);
+                }
+                catch (Exception)
+                {
+                    MediaStreamSource.NotifyError(MediaStreamSourceErrorStatus.ConnectionToServerLost);
+                }
             }
 
 
