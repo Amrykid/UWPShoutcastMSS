@@ -7,13 +7,10 @@ A library for connecting to Shoutcast in Windows 10 UWP applications. It's more 
 Easy, peasy. 
 
 ### Foreground Audio
-Assuming you set up an invisible MediaElement named 'MediaPlayer', the following should work:
+Assuming you set up an invisible MediaPlayer named 'MediaPlayer', the following should work:
 ```c#
-ShoutcastMediaSourceManager streamManager = new ShoutcastMediaSourceManager(new Uri("http://fakeshoutcaststream.com/"));
-streamManager.MetadataChanged += StreamManager_MetadataChanged;
-await streamManager.ConnectAsync();
-
-MediaPlayer.SetMediaStreamSource(streamManager.MediaStreamSource);
+ShoutcastStream shoutcastStream = await ShoutcastStreamFactory.ConnectAsync( new Uri("http://194.232.200.156:8000/"));
+MediaPlayer.SetMediaStreamSource(shoutcastStream.MediaStreamSource);
 MediaPlayer.Play();
 ```
 
@@ -21,18 +18,26 @@ MediaPlayer.Play();
 Use the following in your audio background task.
 
 ```c#
-//Initialize the stream manager
-ShoutcastMediaSourceManager streamManager = new ShoutcastMediaSourceManager(new Uri("http://fakeshoutcaststream.com/"));
+//Initialize the stream and connect
+ShoutcastStream shoutcastStream = await ShoutcastStreamFactory.ConnectAsync( new Uri("http://194.232.200.156:8000/"));
 //Hook up an event handler for grabbing metadata when it changes. This means you can update your "Now Playing" display.
 streamManager.MetadataChanged += Metadata_EventHandler;
-//Connect the manager to the stream.
-await streamManager.ConnectAsync();
+```
+
+```c#
+//Old-style background audio works like this
 //Set the manager's underlying stream as the BackgroundMediaPlayer's MediaSource.
 BackgroundMediaPlayer.Current.SetMediaSource(streamManager.MediaStreamSource);
-//Wait half a second to allow the stream to buffer.
-await Task.Delay(500);
 //Play!
 BackgroundMediaPlayer.Current.Play();
+```
+
+#### Single-process Background Audio
+```c#
+//New-style background audio works like this
+//Make sure to have the background audio permission set in your application's manifest.
+MediaPlayer.SetMediaStreamSource(shoutcastStream.MediaStreamSource);
+MediaPlayer.Play();
 ```
 
 ## Want to contribute?
