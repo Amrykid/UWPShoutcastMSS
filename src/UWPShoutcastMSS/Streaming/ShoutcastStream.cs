@@ -1,0 +1,319 @@
+﻿using System;
+using System.Linq;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using UWPShoutcastMSS.Parsers.Audio;
+using Windows.Media.MediaProperties;
+using Windows.Networking.Sockets;
+using Windows.Storage.Streams;
+using Windows.Media.Core;
+using System.Runtime.InteropServices.WindowsRuntime;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+
+namespace UWPShoutcastMSS.Streaming
+{
+    public class ShoutcastStream : IDisposable
+    {
+        public ServerAudioInfo AudioInfo { get; internal set; }
+        public ServerStationInfo StationInfo { get; internal set; }
+        public MediaStreamSource MediaStreamSource { get; private set; }
+
+        public event EventHandler<ShoutcastMediaSourceStreamMetadataChangedEventArgs> MetadataChanged;
+        public event EventHandler Reconnected;
+
+        private ShoutcastStreamProcessor streamProcessor = null;
+        internal uint metadataInt = 100;
+        private StreamSocket socket;
+        private DataReader socketReader;
+        private DataWriter socketWriter;
+        private Uri serverUrl;
+        private ShoutcastStreamFactoryConnectionSettings serverSettings;
+        private ShoutcastServerType serverType;
+        private AudioEncodingProperties audioProperties = null;
+        private DateTime? lastPauseTime = null;
+
+        internal ShoutcastStream(Uri serverUrl, ShoutcastStreamFactoryConnectionSettings settings, StreamSocket socket, DataReader socketReader, DataWriter socketWriter)
+        {
+            this.socket = socket;
+            this.socketReader = socketReader;
+            this.socketWriter = socketWriter;
+            this.serverUrl = serverUrl;
+            this.serverSettings = settings;
+
+            StationInfo = new ServerStationInfo();
+            AudioInfo = new ServerAudioInfo();
+            //MediaStreamSource = new MediaStreamSource(null);
+            streamProcessor = new ShoutcastStreamProcessor(this, socket, socketReader, socketWriter);
+        }
+
+        private async Task DetectAudioEncodingPropertiesAsync(KeyValuePair<string, string>[] headers)
+        {
+            //if this happens to be an Icecast 2 server, it'll send the audio information for us.
+            if (headers.Any(x => x.Key.ToLower() == "ice-audio-info"))
+            {
+                //looks like it is indeed an Icecast 2 server. lets strip out the data and be on our way.
+
+                serverType = ShoutcastServerType.Icecast;
+
+                /* example: ice-audio-info: ice-bitrate=32;ice-samplerate=32000;ice-channels=2
+                 * "Note that unlike SHOUTcast, it is not necessary to parse ADTS audio frames to obtain the Audio Sample Rate."
+                 * from: http://www.indexcom.com/streaming/player/Icecast2.html
+                 */
+
+                string headerValue = headers.First(x => x.Key.ToLower() == "ice-audio-info").Value;
+
+                //split the properties and values and parsed them into a usable object.
+                KeyValuePair<string, string>[] propertiesAndValues = headerValue.Split(';')
+                    .Select(x => new KeyValuePair<string, string>(
+                        x.Substring(0, x.IndexOf("=")).ToLower().Trim(),
+                        x.Substring(x.IndexOf("=") + 1))).ToArray();
+
+                //grab each value that we need.
+
+                if (AudioInfo.BitRate == 0) //usually this is sent in the regular headers. grab it if it isn't.
+                    AudioInfo.BitRate = uint.Parse(propertiesAndValues.First(x => x.Key == "ice-bitrate" || x.Key == "bitrate").Value);
+
+
+                if (propertiesAndValues.Any(x => x.Key == "ice-channels" || x.Key == "channels") && propertiesAndValues.Any(x => x.Key == "ice-samplerate" || x.Key == "samplerate"))
+                {
+                    AudioInfo.ChannelCount = uint.Parse(propertiesAndValues.First(x => x.Key == "ice-channels" || x.Key == "channels").Value);
+                    AudioInfo.SampleRate = uint.Parse(propertiesAndValues.First(x => x.Key == "ice-samplerate" || x.Key == "samplerate").Value);
+
+                    //now just create the appropriate AudioEncodingProperties object.
+                    switch (AudioInfo.AudioFormat)
+                    {
+                        case StreamAudioFormat.MP3:
+                            audioProperties = AudioEncodingProperties.CreateMp3(AudioInfo.SampleRate, AudioInfo.ChannelCount, AudioInfo.BitRate);
+                            break;
+                        case StreamAudioFormat.AAC:
+                        case StreamAudioFormat.AAC_ADTS:
+                            audioProperties = AudioEncodingProperties.CreateAacAdts(AudioInfo.SampleRate, AudioInfo.ChannelCount, AudioInfo.BitRate);
+                            break;
+                    }
+                }
+                else
+                {
+                    //something is missing from audio-info so we need to fallback.
+
+                    audioProperties = await ParseEncodingFromMediaAsync();
+                }
+            }
+            else
+            {
+                audioProperties = await ParseEncodingFromMediaAsync();
+            }
+        }
+
+        private static string ByteToBinaryString(byte bte)
+        {
+            return Convert.ToString(bte, 2).PadLeft(8, '0');
+        }
+
+        private async Task<AudioEncodingProperties> ParseEncodingFromMediaAsync()
+        {
+            //grab the first frame and strip it for information
+
+            AudioEncodingProperties obtainedProperties = null;
+            IBuffer buffer = null;
+
+            if (AudioInfo.AudioFormat == StreamAudioFormat.AAC)
+            {
+                //obtainedProperties = AudioEncodingProperties.CreateAac(0, 2, 0);
+                throw new Exception("Not supported.");
+            }
+
+            var provider = AudioProviderFactory.GetAudioProvider(AudioInfo.AudioFormat);
+
+            ServerAudioInfo firstFrame = await provider.GrabFrameInfoAsync(streamProcessor, AudioInfo);
+
+            //loop until we receive a few "frames" with identical information.
+            while (true)
+            {
+                ServerAudioInfo secondFrame = await provider.GrabFrameInfoAsync(streamProcessor, AudioInfo);
+
+                if (firstFrame.BitRate == secondFrame.BitRate
+                    && firstFrame.SampleRate == secondFrame.SampleRate)
+                {
+                    //both frames are identical, use one of them and escape the loop.
+                    AudioInfo = firstFrame;
+                    break;
+                }
+                else
+                {
+                    //frames aren't identical, get rid of the first one using the second frame and loop back.
+                    firstFrame = secondFrame;
+                    continue;
+                }
+            }
+
+            if (AudioInfo.AudioFormat == StreamAudioFormat.MP3)
+            {
+                //skip the entire first frame/sample to get back on track
+                await socketReader.LoadAsync(MP3Parser.mp3_sampleSize - MP3Parser.HeaderLength);
+                buffer = socketReader.ReadBuffer(MP3Parser.mp3_sampleSize - MP3Parser.HeaderLength);
+                streamProcessor.byteOffset += MP3Parser.mp3_sampleSize - MP3Parser.HeaderLength;
+
+
+                obtainedProperties = AudioEncodingProperties.CreateMp3((uint)AudioInfo.SampleRate, (uint)AudioInfo.ChannelCount, AudioInfo.BitRate);
+            }
+            else if (AudioInfo.AudioFormat == StreamAudioFormat.AAC_ADTS)
+            {
+                //skip the entire first frame/sample to get back on track
+                await socketReader.LoadAsync(AAC_ADTSParser.aac_adts_sampleSize - AAC_ADTSParser.HeaderLength);
+                buffer = socketReader.ReadBuffer(AAC_ADTSParser.aac_adts_sampleSize - AAC_ADTSParser.HeaderLength);
+                streamProcessor.byteOffset += AAC_ADTSParser.aac_adts_sampleSize - AAC_ADTSParser.HeaderLength;
+
+                obtainedProperties = AudioEncodingProperties.CreateAacAdts((uint)AudioInfo.SampleRate, (uint)AudioInfo.ChannelCount, AudioInfo.BitRate);
+            }
+            else
+            {
+                throw new Exception("Unsupported format.");
+            }
+
+            streamProcessor.metadataPos += buffer.Length; //very important or it will throw everything off!
+
+            return obtainedProperties;
+        }
+
+        internal void RaiseMetadataChangedEvent(ShoutcastMediaSourceStreamMetadataChangedEventArgs shoutcastMediaSourceStreamMetadataChangedEventArgs)
+        {
+            if (MetadataChanged != null)
+            {
+                MetadataChanged(this, shoutcastMediaSourceStreamMetadataChangedEventArgs);
+            }
+        }
+
+        internal async Task HandleHeadersAsync(KeyValuePair<string, string>[] headers)
+        {
+            if (headers == null) throw new ArgumentNullException(nameof(headers), "Headers are null");
+            if (headers.Length == 0) throw new ArgumentException(paramName: "headers", message: "Header count is 0");
+
+            await DetectAudioEncodingPropertiesAsync(headers);
+
+            if (audioProperties == null) throw new InvalidOperationException("Unable to detect audio encoding properties.");
+
+            var audioStreamDescriptor = new AudioStreamDescriptor(audioProperties);
+            MediaStreamSource = new MediaStreamSource(audioStreamDescriptor);
+            MediaStreamSource.Paused += MediaStreamSource_Paused;
+            MediaStreamSource.Starting += MediaStreamSource_Starting;
+            MediaStreamSource.Closed += MediaStreamSource_Closed;
+            MediaStreamSource.SampleRequested += MediaStreamSource_SampleRequested;
+        }
+
+        private void MediaStreamSource_Closed(MediaStreamSource sender, MediaStreamSourceClosedEventArgs args)
+        {
+            //todo needs to be handled.
+        }
+
+        private void MediaStreamSource_Starting(MediaStreamSource sender, MediaStreamSourceStartingEventArgs args)
+        {
+            lastPauseTime = null;
+        }
+
+        private void MediaStreamSource_Paused(MediaStreamSource sender, object args)
+        {
+            lastPauseTime = DateTime.Now;
+        }
+
+        private async Task ReconnectSocketsAsync()
+        {
+            var result = await ShoutcastStreamFactory.ConnectInternalAsync(serverUrl,
+                serverSettings);
+
+            this.socket = result.socket;
+            this.socketReader = result.socketReader;
+            this.socketWriter = result.socketWriter;
+
+            streamProcessor = new ShoutcastStreamProcessor(this, socket, socketReader, socketWriter);
+        }
+
+        public void Disconnect()
+        {
+            try
+            {
+                MediaStreamSource.Starting -= MediaStreamSource_Starting;
+                MediaStreamSource.Closed -= MediaStreamSource_Closed;
+                MediaStreamSource.Paused -= MediaStreamSource_Paused;
+                MediaStreamSource.SampleRequested -= MediaStreamSource_SampleRequested;
+            }
+            catch (ArgumentException)
+            {
+                //Event handlers must have been disconnected already. Continue anyway.
+            }
+
+            DisconnectSockets();
+        }
+
+        private void DisconnectSockets()
+        {
+            streamProcessor = null;
+
+            if (socketWriter != null)
+            {
+                socketWriter.DetachStream();
+                socketWriter.Dispose();
+                socketWriter = null;
+            }
+
+            if (socketReader != null)
+            {
+                socketReader.DetachStream();
+                socketReader.Dispose();
+                socketReader = null;
+            }
+
+            socket?.Dispose();
+            socket = null;
+        }
+
+        private async void MediaStreamSource_SampleRequested(MediaStreamSource sender, MediaStreamSourceSampleRequestedEventArgs args)
+        {
+            var request = args.Request;
+            var deferral = request.GetDeferral();
+            bool connected = true;
+            try
+            {
+                await ReadSampleAsync(request);
+            }
+            catch (COMException ex)
+            {
+                //Usually this is thrown when we get disconnected because of inactivity.
+                //Reset and reconnect.
+                DisconnectSockets();
+                connected = false;
+            }
+
+            if (!connected)
+            {
+                try
+                {
+                    await ReconnectSocketsAsync();
+                    Reconnected?.Invoke(this, EventArgs.Empty);
+
+                    await ReadSampleAsync(request);
+                }
+                catch (Exception)
+                {
+                    MediaStreamSource.NotifyError(MediaStreamSourceErrorStatus.ConnectionToServerLost);
+                }
+            }
+
+
+            deferral.Complete();
+        }
+
+        private async Task ReadSampleAsync(MediaStreamSourceSampleRequest request)
+        {
+            var sample = await streamProcessor.GetNextSampleAsync();
+
+            if (sample != null)
+                request.Sample = sample;
+        }
+
+        public void Dispose()
+        {
+            Disconnect();
+        }
+    }
+}

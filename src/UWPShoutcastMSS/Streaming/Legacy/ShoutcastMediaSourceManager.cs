@@ -22,25 +22,8 @@ namespace UWPShoutcastMSS.Streaming
         TimeSpan timeOffSet = new TimeSpan();
         private UInt64 byteOffset;
 
-        #region MP3 Framesize and length for Layer II and Layer III - https://code.msdn.microsoft.com/windowsapps/MediaStreamSource-media-dfd55dff/sourcecode?fileId=111712&pathId=208523738
-
-        UInt32 mp3_sampleSize = 1152;
-        TimeSpan mp3_sampleDuration = new TimeSpan(0, 0, 0, 0, 70);
-        #endregion
-
-        //AAC_ADTS := https://wiki.multimedia.cx/index.php/ADTS
-        UInt32 aac_adts_sampleSize = 1024;
-        TimeSpan aac_adts_sampleDuration = new TimeSpan(0, 0, 0, 0, 70);
-
-        public enum StreamAudioFormat
-        {
-            MP3,
-            AAC,
-            AAC_ADTS //https://en.wikipedia.org/wiki/High-Efficiency_Advanced_Audio_Coding
-        }
-
         public Windows.Media.Core.MediaStreamSource MediaStreamSource { get; private set; }
-        public ShoutcastStationInfo StationInfo { get; private set; }
+        public ServerStationInfo StationInfo { get; private set; }
         public ServerAudioInfo AudioInfo { get; private set; }
 
         public bool ShouldGetMetadata { get; private set; }
@@ -81,7 +64,7 @@ namespace UWPShoutcastMSS.Streaming
 
         public ShoutcastMediaSourceStream(Uri url, ShoutcastServerType stationServerType = ShoutcastServerType.Shoutcast, string relativePath = ";", bool getMetadata = true)
         {
-            StationInfo = new ShoutcastStationInfo();
+            StationInfo = new ServerStationInfo();
 
             streamUrl = url;
 
@@ -252,9 +235,9 @@ namespace UWPShoutcastMSS.Streaming
                         }
 
                         //skip the entire first frame/sample to get back on track
-                        await socketReader.LoadAsync(mp3_sampleSize - MP3Parser.HeaderLength);
-                        buffer = socketReader.ReadBuffer(mp3_sampleSize - MP3Parser.HeaderLength);
-                        byteOffset += mp3_sampleSize - MP3Parser.HeaderLength;
+                        await socketReader.LoadAsync(MP3Parser.mp3_sampleSize - MP3Parser.HeaderLength);
+                        buffer = socketReader.ReadBuffer(MP3Parser.mp3_sampleSize - MP3Parser.HeaderLength);
+                        byteOffset += MP3Parser.mp3_sampleSize - MP3Parser.HeaderLength;
 
 
                         obtainedProperties = AudioEncodingProperties.CreateMp3((uint)AudioInfo.SampleRate, (uint)AudioInfo.ChannelCount, AudioInfo.BitRate);
@@ -309,9 +292,9 @@ namespace UWPShoutcastMSS.Streaming
                                 if (AudioInfo.BitRate == 0) throw new Exception("Unknown bitrate.");
 
                                 //skip the entire first frame/sample to get back on track
-                                await socketReader.LoadAsync(aac_adts_sampleSize - AAC_ADTSParser.HeaderLength);
-                                buffer = socketReader.ReadBuffer(aac_adts_sampleSize - AAC_ADTSParser.HeaderLength);
-                                byteOffset += aac_adts_sampleSize - AAC_ADTSParser.HeaderLength;
+                                await socketReader.LoadAsync(AAC_ADTSParser.aac_adts_sampleSize - AAC_ADTSParser.HeaderLength);
+                                buffer = socketReader.ReadBuffer(AAC_ADTSParser.aac_adts_sampleSize - AAC_ADTSParser.HeaderLength);
+                                byteOffset += AAC_ADTSParser.aac_adts_sampleSize - AAC_ADTSParser.HeaderLength;
 
                                 obtainedProperties = AudioEncodingProperties.CreateAacAdts((uint)AudioInfo.SampleRate, (uint)AudioInfo.ChannelCount, AudioInfo.BitRate);
 
@@ -523,7 +506,7 @@ namespace UWPShoutcastMSS.Streaming
                 //request.ReportSampleProgress(25);
 
                 //if metadataPos is less than mp3_sampleSize away from metadataInt
-                if (metadataInt - metadataPos <= (AudioInfo.AudioFormat == StreamAudioFormat.MP3 ? mp3_sampleSize : aac_adts_sampleSize) && metadataInt - metadataPos > 0)
+                if (metadataInt - metadataPos <= (AudioInfo.AudioFormat == StreamAudioFormat.MP3 ? MP3Parser.mp3_sampleSize : AAC_ADTSParser.aac_adts_sampleSize) && metadataInt - metadataPos > 0)
                 {
                     //parse part of the frame.
 
@@ -690,12 +673,12 @@ namespace UWPShoutcastMSS.Streaming
             if (partial)
             {
                 buffer = partialBytes.AsBuffer();
-                sampleLength = mp3_sampleSize - (uint)partialBytes.Length;
+                sampleLength = MP3Parser.mp3_sampleSize - (uint)partialBytes.Length;
                 byteOffset += sampleLength;
             }
             else
             {
-                var read = await socketReader.LoadAsync(mp3_sampleSize);
+                var read = await socketReader.LoadAsync(MP3Parser.mp3_sampleSize);
 
                 if (read == 0)
                 {
@@ -703,27 +686,27 @@ namespace UWPShoutcastMSS.Streaming
                     MediaStreamSource.NotifyError(MediaStreamSourceErrorStatus.ConnectionToServerLost);
                     return new Tuple<MediaStreamSample, uint>(null, 0);
                 }
-                else if (read < mp3_sampleSize)
+                else if (read < MP3Parser.mp3_sampleSize)
                 {
                     buffer = socketReader.ReadBuffer(read);
 
-                    byteOffset += mp3_sampleSize;
+                    byteOffset += MP3Parser.mp3_sampleSize;
                 }
                 else
                 {
-                    buffer = socketReader.ReadBuffer(mp3_sampleSize);
+                    buffer = socketReader.ReadBuffer(MP3Parser.mp3_sampleSize);
 
-                    byteOffset += mp3_sampleSize;
+                    byteOffset += MP3Parser.mp3_sampleSize;
                 }
 
-                sampleLength = mp3_sampleSize;
+                sampleLength = MP3Parser.mp3_sampleSize;
             }
 
             sample = MediaStreamSample.CreateFromBuffer(buffer, timeOffSet);
-            sample.Duration = mp3_sampleDuration;
+            sample.Duration = MP3Parser.mp3_sampleDuration;
             sample.KeyFrame = true;
 
-            timeOffSet = timeOffSet.Add(mp3_sampleDuration);
+            timeOffSet = timeOffSet.Add(MP3Parser.mp3_sampleDuration);
 
 
             return new Tuple<MediaStreamSample, uint>(sample, sampleLength);
@@ -738,23 +721,23 @@ namespace UWPShoutcastMSS.Streaming
             if (partial)
             {
                 buffer = partialBytes.AsBuffer();
-                sampleLength = aac_adts_sampleSize - (uint)partialBytes.Length;
+                sampleLength = AAC_ADTSParser.aac_adts_sampleSize - (uint)partialBytes.Length;
                 byteOffset += sampleLength;
             }
             else
             {
-                await socketReader.LoadAsync(aac_adts_sampleSize);
-                buffer = socketReader.ReadBuffer(aac_adts_sampleSize);
+                await socketReader.LoadAsync(AAC_ADTSParser.aac_adts_sampleSize);
+                buffer = socketReader.ReadBuffer(AAC_ADTSParser.aac_adts_sampleSize);
 
-                byteOffset += aac_adts_sampleSize;
-                sampleLength = aac_adts_sampleSize;
+                byteOffset += AAC_ADTSParser.aac_adts_sampleSize;
+                sampleLength = AAC_ADTSParser.aac_adts_sampleSize;
             }
 
             sample = MediaStreamSample.CreateFromBuffer(buffer, timeOffSet);
-            sample.Duration = aac_adts_sampleDuration;
+            sample.Duration = AAC_ADTSParser.aac_adts_sampleDuration;
             sample.KeyFrame = true;
 
-            timeOffSet = timeOffSet.Add(aac_adts_sampleDuration);
+            timeOffSet = timeOffSet.Add(AAC_ADTSParser.aac_adts_sampleDuration);
 
 
             return new Tuple<MediaStreamSample, uint>(sample, sampleLength);

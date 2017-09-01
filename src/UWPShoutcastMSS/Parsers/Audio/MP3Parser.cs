@@ -8,15 +8,49 @@ namespace UWPShoutcastMSS.Parsers.Audio
 {
     public static class MP3Parser
     {
+        #region MP3 Framesize and length for Layer II and Layer III - https://code.msdn.microsoft.com/windowsapps/MediaStreamSource-media-dfd55dff/sourcecode?fileId=111712&pathId=208523738
+
+        public const UInt32 mp3_sampleSize = 1152;
+        public static TimeSpan mp3_sampleDuration = new TimeSpan(0, 0, 0, 0, 70);
+        #endregion
+
+
         //Reference: https://www.mp3-tech.org/programmer/frame_header.html
 
-        public static readonly byte[] FrameSync = new byte[] { (byte)255, (byte)7 }; //11 bits - ADTS sync bits.
+        public static readonly byte[] FrameSync = new byte[] {
+            // hexadecimal: 1 2 3 4 5 6 7 8 9 A|10 B|11 C|12 D|13 E|14 F|15
+
+            //0xFF where F = 15 -> (F * 16^1) + (F * 16^0) = 255
+            (byte)0xFF,
+            //0xE0 where E = 14 -> (E * 16^1) + (0 * 16^0) = 224. in 224, the first three bits are 1 and the rest are 0: 1110000
+            (byte)0xE0,
+        }; //11 bits - sync bits.
         public const int HeaderLength = 4;
         //public const int HeaderLengthWithCRC = 9;
 
         public static bool IsFrameSync(byte firstByte, byte secondByte)
         {
-            return (firstByte == FrameSync[0] && (secondByte >> 5) == FrameSync[1] && secondByte != (byte)255);
+            //AAAAAAAA AAABBCCD EEEEFFGH IIJJKLMM 
+
+            bool firstByteIs255 = firstByte == FrameSync[0];
+
+            if (firstByteIs255)
+            {
+                return (secondByte & FrameSync[1]) >= FrameSync[1];
+            }
+
+            return false;
+        }
+
+        public static bool IsValidHeader(byte[] header)
+        {
+            if (header[1] <= 0xE0) return false;
+            if (GetMPEGAudioVersion(header) == double.NaN) return false;
+            if (GetMPEGAudioLayer(header) <= 0) return false;
+            if (GetBitRate(header) <= 0) return false;
+            if (GetSampleRate(header) <= 0) return false;
+
+            return true;
         }
 
         public static double GetMPEGAudioVersion(byte[] header)
@@ -44,7 +78,7 @@ namespace UWPShoutcastMSS.Parsers.Audio
                 case 0:
                     return 2.5; //MPEG v2.5
                 default:
-                    throw new Exception("Reserved or unknown version.");
+                    return double.NaN; //Reserved or unknown version.
             }
         }
 
@@ -72,7 +106,7 @@ namespace UWPShoutcastMSS.Parsers.Audio
                 case 3:
                     return 1; //layer 1
                 default:
-                    throw new Exception("Reserved or unknown version.");
+                    return 0;
             }
         }
 
@@ -209,7 +243,7 @@ namespace UWPShoutcastMSS.Parsers.Audio
                 }
                 else
                 {
-                    throw new Exception("Unknown MPEG layer.");
+                    return -2; //Unknown MPEG layer.
                 }
             }
 
@@ -221,6 +255,16 @@ namespace UWPShoutcastMSS.Parsers.Audio
             int value = (int)data;
 
             int bitRate = bitRateTable[tableColumn, value];
+
+            if (bitRate > 320)
+            {
+                //its theoretically possible to go higher than 320, but most decoders are only required to support up to 320.
+                // https://hydrogenaud.io/index.php/topic,49009.0.html
+                //this will also guard against incorrect bitrate calculations
+
+                //throw new Exception("BitRate out of range or unsupported.");
+                return -2;
+            }
 
             return bitRate;
         }
@@ -250,6 +294,8 @@ namespace UWPShoutcastMSS.Parsers.Audio
             data = (byte)(data >> 6);
 
             int value = (int)data;
+
+            if (data == 0x3) return -2; //reserved sample rate. bad
 
             int sampleRate = sampleRateTable[value];
 

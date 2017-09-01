@@ -17,5 +17,6 @@ namespace UWPShoutcastMSS.Streaming
         public uint ChannelCount { get; internal set; } = 2;
         public uint BitRate { get; internal set; }
         public StreamAudioFormat AudioFormat { get; internal set; }
+        internal byte[] HeaderData { get; set; }
     }
 }

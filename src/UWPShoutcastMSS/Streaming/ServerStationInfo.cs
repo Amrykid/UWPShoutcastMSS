@@ -6,9 +6,9 @@ using System.Threading.Tasks;
 
 namespace UWPShoutcastMSS.Streaming
 {
-    public class ShoutcastStationInfo
+    public class ServerStationInfo
     {
-        internal ShoutcastStationInfo()
+        internal ServerStationInfo()
         {
 
         }
