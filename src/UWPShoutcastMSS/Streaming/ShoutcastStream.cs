@@ -152,7 +152,7 @@ namespace UWPShoutcastMSS.Streaming
                 //skip the entire first frame/sample to get back on track
                 await socketReader.LoadAsync(MP3Parser.mp3_sampleSize - MP3Parser.HeaderLength);
                 buffer = socketReader.ReadBuffer(MP3Parser.mp3_sampleSize - MP3Parser.HeaderLength);
-                streamProcessor.byteOffset += MP3Parser.mp3_sampleSize - MP3Parser.HeaderLength;
+                //streamProcessor.byteOffset += MP3Parser.mp3_sampleSize - MP3Parser.HeaderLength;
 
 
                 obtainedProperties = AudioEncodingProperties.CreateMp3((uint)AudioInfo.SampleRate, (uint)AudioInfo.ChannelCount, AudioInfo.BitRate);
@@ -162,7 +162,7 @@ namespace UWPShoutcastMSS.Streaming
                 //skip the entire first frame/sample to get back on track
                 await socketReader.LoadAsync(AAC_ADTSParser.aac_adts_sampleSize - AAC_ADTSParser.HeaderLength);
                 buffer = socketReader.ReadBuffer(AAC_ADTSParser.aac_adts_sampleSize - AAC_ADTSParser.HeaderLength);
-                streamProcessor.byteOffset += AAC_ADTSParser.aac_adts_sampleSize - AAC_ADTSParser.HeaderLength;
+                //streamProcessor.byteOffset += AAC_ADTSParser.aac_adts_sampleSize - AAC_ADTSParser.HeaderLength;
 
                 obtainedProperties = AudioEncodingProperties.CreateAacAdts((uint)AudioInfo.SampleRate, (uint)AudioInfo.ChannelCount, AudioInfo.BitRate);
             }

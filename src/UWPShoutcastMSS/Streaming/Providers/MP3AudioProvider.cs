@@ -80,7 +80,7 @@ namespace UWPShoutcastMSS.Streaming.Providers
             {
                 buffer = partialBytes.AsBuffer();
                 sampleLength = MP3Parser.mp3_sampleSize - (uint)partialBytes.Length;
-                processor.byteOffset += sampleLength;
+                //processor.byteOffset += sampleLength;
             }
             else
             {
@@ -88,7 +88,7 @@ namespace UWPShoutcastMSS.Streaming.Providers
 
                 buffer = socketReader.ReadBuffer(read < MP3Parser.mp3_sampleSize ? read : MP3Parser.mp3_sampleSize);
 
-                processor.byteOffset += MP3Parser.mp3_sampleSize;
+                //processor.byteOffset += MP3Parser.mp3_sampleSize;
 
                 sampleLength = MP3Parser.mp3_sampleSize;
             }

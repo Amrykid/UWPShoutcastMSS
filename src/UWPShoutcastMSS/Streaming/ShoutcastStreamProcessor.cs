@@ -60,7 +60,7 @@ namespace UWPShoutcastMSS.Streaming
                         ParseSongMetadata(metadata);
                     }
 
-                    byteOffset = 0;
+                    //byteOffset = 0;
                 }
             }
         }
@@ -163,7 +163,7 @@ namespace UWPShoutcastMSS.Streaming
             for (int i = 0; i < count; i++)
             {
                 result[i] = socketReader.ReadByte();
-                byteOffset += 1;
+                //byteOffset += 1;
                 metadataPos += 1;
             }
 

@@ -83,7 +83,7 @@ namespace UWPShoutcastMSS.Streaming.Providers
             {
                 buffer = partialBytes.AsBuffer();
                 sampleLength = AAC_ADTSParser.aac_adts_sampleSize - (uint)partialBytes.Length;
-                processor.byteOffset += sampleLength;
+                //processor.byteOffset += sampleLength;
             }
             else
             {
@@ -91,7 +91,7 @@ namespace UWPShoutcastMSS.Streaming.Providers
 
                 buffer = socketReader.ReadBuffer(AAC_ADTSParser.aac_adts_sampleSize);
 
-                processor.byteOffset += AAC_ADTSParser.aac_adts_sampleSize;
+                //processor.byteOffset += AAC_ADTSParser.aac_adts_sampleSize;
                 sampleLength = AAC_ADTSParser.aac_adts_sampleSize;
             }
 
