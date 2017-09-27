@@ -37,10 +37,23 @@ namespace UWPShoutcastMSS.Streaming
             result.socketReader = new DataReader(result.socket.InputStream);
 
             //build a http request
+
+            string portStr = "";
+            switch (serverUrl.Scheme.ToLower())
+            {
+                case "http":
+                    portStr = serverUrl.Port != 80 ? ":" + serverUrl.Port : "";
+                    break;
+                case "https":
+                    portStr = serverUrl.Port != 443 ? ":" + serverUrl.Port : "";
+                    throw new NotImplementedException("https streams are currently not supported.");
+                    break;
+            }
+
             StringBuilder requestBuilder = new StringBuilder();
             requestBuilder.AppendLine("GET " + serverUrl.LocalPath + settings.RelativePath + " HTTP/1.1");
             requestBuilder.AppendLine("Icy-MetaData: 1");
-            requestBuilder.AppendLine("Host: " + serverUrl.Host + (serverUrl.Port != 80 ? ":" + serverUrl.Port : ""));
+            requestBuilder.AppendLine("Host: " + serverUrl.Host + portStr);
             requestBuilder.AppendLine("Connection: Keep-Alive");
             requestBuilder.AppendLine("User-Agent: " + settings.UserAgent);
             requestBuilder.AppendLine();
@@ -103,7 +116,7 @@ namespace UWPShoutcastMSS.Streaming
                         //clean up.
                         shoutStream.Dispose();
 
-                        return await ConnectAsync(action.ActionUrl, settings); 
+                        return await ConnectAsync(action.ActionUrl, settings);
                     }
                 default:
                     throw new Exception("We weren't able to connect for some reason.");
@@ -136,15 +149,21 @@ namespace UWPShoutcastMSS.Streaming
                         switch (statusCode)
                         {
                             case 200: return ConnectionAction.FromSuccess();
+
+                            case 400: //bad request
                             case 404: return ConnectionAction.FromFailure();
+
                             case 302: //Found. Has the new location in the LOCATION header.
                                 {
                                     var newLocation = headers.FirstOrDefault(x => x.Key.ToUpper().Equals("LOCATION"));
                                     if (!string.IsNullOrWhiteSpace(newLocation.Value))
                                     {
                                         //We need to connect to this url instead. Throw it back to the top.
-                                        return new ConnectionAction() { ActionType = ConnectionActionType.Redirect,
-                                            ActionUrl = new Uri(newLocation.Value) };
+                                        return new ConnectionAction()
+                                        {
+                                            ActionType = ConnectionActionType.Redirect,
+                                            ActionUrl = new Uri(newLocation.Value)
+                                        };
                                     }
                                     else
                                     {
@@ -167,12 +186,15 @@ namespace UWPShoutcastMSS.Streaming
             shoutStream.metadataInt = uint.Parse(headers.First(x => x.Key == "ICY-METAINT").Value);
 
             shoutStream.StationInfo.StationName = headers.First(x => x.Key == "ICY-NAME").Value;
-            shoutStream.StationInfo.StationGenre = headers.First(x => x.Key == "ICY-GENRE").Value;
+
+            if (headers.Any(x => x.Key.ToUpper() == "ICY-GENRE"))
+                shoutStream.StationInfo.StationGenre = headers.First(x => x.Key == "ICY-GENRE").Value;
 
             if (headers.Any(x => x.Key.ToUpper() == "ICY-DESCRIPTION"))
                 shoutStream.StationInfo.StationDescription = headers.First(x => x.Key.ToUpper() == "ICY-DESCRIPTION").Value;
 
-            shoutStream.AudioInfo.BitRate = uint.Parse(headers.FirstOrDefault(x => x.Key == "ICY-BR").Value);
+            if (headers.Any(x => x.Key.ToUpper() == "ICY-BR"))
+                shoutStream.AudioInfo.BitRate = uint.Parse(headers.FirstOrDefault(x => x.Key == "ICY-BR").Value);
 
             switch (headers.First(x => x.Key == "CONTENT-TYPE").Value.ToLower().Trim())
             {

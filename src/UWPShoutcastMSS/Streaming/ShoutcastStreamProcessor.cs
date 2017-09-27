@@ -51,13 +51,33 @@ namespace UWPShoutcastMSS.Streaming
 
                     if (metaInt > 0)
                     {
-                        uint metaDataInfo = metaInt * 16;
+                        try
+                        {
+                            uint metaDataInfo = metaInt * 16;
 
-                        await socketReader.LoadAsync((uint)metaDataInfo);
+                            await socketReader.LoadAsync((uint)metaDataInfo);
 
-                        var metadata = socketReader.ReadString((uint)metaDataInfo);
+                            var metadata = socketReader.ReadString((uint)metaDataInfo);
 
-                        ParseSongMetadata(metadata);
+                            ParseSongMetadata(metadata);
+                        }
+                        catch (Exception e)
+                        {
+                            throw new Exception("Error occurred while parsing metadata.", e);
+                            //if (e is System.ArgumentOutOfRangeException || e is NullReferenceException)
+                            //{
+                            //    //No mapping for the Unicode character exists in the target multi-byte code page.
+
+                            //    shoutcastStream.MediaStreamSource.MusicProperties.Title = "Unknown Song";
+                            //    shoutcastStream.MediaStreamSource.MusicProperties.Artist = "Unknown Artist";
+
+                            //    shoutcastStream.RaiseMetadataChangedEvent(new ShoutcastMediaSourceStreamMetadataChangedEventArgs()
+                            //    {
+                            //        Title = "Unknown Song",
+                            //        Artist = "Unknown Artist"
+                            //    });
+                            //}
+                        }
                     }
 
                     //byteOffset = 0;
