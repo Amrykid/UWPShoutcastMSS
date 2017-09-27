@@ -28,7 +28,7 @@ namespace UWPShoutcastMSS.Streaming
         private DataReader socketReader;
         private DataWriter socketWriter;
         private Uri serverUrl;
-        private ShoutcastStreamFactoryConnectionSettings serverSettings;
+        internal ShoutcastStreamFactoryConnectionSettings serverSettings;
         private ShoutcastServerType serverType;
         private AudioEncodingProperties audioProperties = null;
         private DateTime? lastPauseTime = null;
@@ -171,7 +171,8 @@ namespace UWPShoutcastMSS.Streaming
                 throw new Exception("Unsupported format.");
             }
 
-            streamProcessor.metadataPos += buffer.Length; //very important or it will throw everything off!
+            if (serverSettings.RequestSongMetdata)
+                streamProcessor.metadataPos += buffer.Length; //very important or it will throw everything off!
 
             return obtainedProperties;
         }

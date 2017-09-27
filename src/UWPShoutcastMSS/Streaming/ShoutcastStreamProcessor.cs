@@ -39,6 +39,8 @@ namespace UWPShoutcastMSS.Streaming
 
         private async Task HandleMetadataAsync()
         {
+            if (!shoutcastStream.serverSettings.RequestSongMetdata) return;
+
             if (metadataPos == shoutcastStream.metadataInt)
             {
                 metadataPos = 0;
@@ -134,8 +136,8 @@ namespace UWPShoutcastMSS.Streaming
 
 
             //if metadataPos is less than sampleSize away from metadataInt
-            if (shoutcastStream.metadataInt - metadataPos <= sampleProvider.GetSampleSize()
-                && shoutcastStream.metadataInt - metadataPos > 0)
+            if (shoutcastStream.serverSettings.RequestSongMetdata && (shoutcastStream.metadataInt - metadataPos <= sampleProvider.GetSampleSize()
+                && shoutcastStream.metadataInt - metadataPos > 0))
             {
                 //parse part of the frame.
                 byte[] partialFrame = new byte[shoutcastStream.metadataInt - metadataPos];
@@ -162,7 +164,8 @@ namespace UWPShoutcastMSS.Streaming
                 }
                 else
                 {
-                    metadataPos += sampleLength;
+                    if (shoutcastStream.serverSettings.RequestSongMetdata)
+                        metadataPos += sampleLength;
                 }
             }
 
@@ -184,7 +187,7 @@ namespace UWPShoutcastMSS.Streaming
             {
                 result[i] = socketReader.ReadByte();
                 //byteOffset += 1;
-                metadataPos += 1;
+                if (shoutcastStream.serverSettings.RequestSongMetdata) metadataPos += 1;
             }
 
             return result;

@@ -52,7 +52,7 @@ namespace UWPShoutcastMSS.Streaming
 
             StringBuilder requestBuilder = new StringBuilder();
             requestBuilder.AppendLine("GET " + serverUrl.LocalPath + settings.RelativePath + " HTTP/1.1");
-            requestBuilder.AppendLine("Icy-MetaData: 1");
+            if (settings.RequestSongMetdata) requestBuilder.AppendLine("Icy-MetaData: 1");
             requestBuilder.AppendLine("Host: " + serverUrl.Host + portStr);
             requestBuilder.AppendLine("Connection: Keep-Alive");
             requestBuilder.AppendLine("User-Agent: " + settings.UserAgent);
