@@ -183,7 +183,8 @@ namespace UWPShoutcastMSS.Streaming
             string[] responseSplitByLine = response.Split(new string[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries);
             KeyValuePair<string, string>[] headers = ParseHttpResponseToKeyPairArray(responseSplitByLine);
 
-            shoutStream.metadataInt = uint.Parse(headers.First(x => x.Key == "ICY-METAINT").Value);
+            if (shoutStream.serverSettings.RequestSongMetdata)
+                shoutStream.metadataInt = uint.Parse(headers.First(x => x.Key == "ICY-METAINT").Value);
 
             shoutStream.StationInfo.StationName = headers.First(x => x.Key == "ICY-NAME").Value;
 
