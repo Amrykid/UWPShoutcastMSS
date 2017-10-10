@@ -49,6 +49,7 @@ namespace UWPShoutcastMSS.Parsers.Audio
             if (GetMPEGAudioLayer(header) <= 0) return false;
             if (GetBitRate(header) <= 0) return false;
             if (GetSampleRate(header) <= 0) return false;
+            if (GetChannelCount(header) <= 0) return false;
 
             return true;
         }
@@ -330,7 +331,8 @@ namespace UWPShoutcastMSS.Parsers.Audio
                 case 3: //mono
                     return 1;
                 default:
-                    throw new Exception("Unsupported audio channel mode.");
+                    //throw new Exception("Unsupported audio channel mode.");
+                    return -1;
             }
         }
 
