@@ -10,6 +10,7 @@ using Windows.Media.Core;
 using System.Runtime.InteropServices.WindowsRuntime;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Threading;
 
 namespace UWPShoutcastMSS.Streaming
 {
@@ -33,6 +34,7 @@ namespace UWPShoutcastMSS.Streaming
         private AudioEncodingProperties audioProperties = null;
         private DateTime? lastPauseTime = null;
         private volatile bool isDisposed = false;
+        private CancellationTokenSource cancelTokenSource = null;
 
         internal ShoutcastStream(Uri serverUrl, ShoutcastStreamFactoryConnectionSettings settings, StreamSocket socket, DataReader socketReader, DataWriter socketWriter)
         {
@@ -44,6 +46,7 @@ namespace UWPShoutcastMSS.Streaming
 
             StationInfo = new ServerStationInfo();
             AudioInfo = new ServerAudioInfo();
+            cancelTokenSource = new CancellationTokenSource();
             //MediaStreamSource = new MediaStreamSource(null);
             streamProcessor = new ShoutcastStreamProcessor(this, socket, socketReader, socketWriter);
         }
@@ -131,6 +134,8 @@ namespace UWPShoutcastMSS.Streaming
             //loop until we receive a few "frames" with identical information.
             while (true)
             {
+                if (cancelTokenSource.IsCancellationRequested) return;
+
                 ServerAudioInfo secondFrame = await provider.GrabFrameInfoAsync(streamProcessor, AudioInfo);
 
                 if (firstFrame.BitRate == secondFrame.BitRate
@@ -147,6 +152,8 @@ namespace UWPShoutcastMSS.Streaming
                     continue;
                 }
             }
+
+            if (cancelTokenSource.IsCancellationRequested) return;
 
             if (AudioInfo.AudioFormat == StreamAudioFormat.MP3)
             {
@@ -193,6 +200,8 @@ namespace UWPShoutcastMSS.Streaming
 
             await DetectAudioEncodingPropertiesAsync(headers);
 
+            if (cancelTokenSource.IsCancellationRequested) return;
+
             if (audioProperties == null) throw new InvalidOperationException("Unable to detect audio encoding properties.");
 
             var audioStreamDescriptor = new AudioStreamDescriptor(audioProperties);
@@ -227,6 +236,8 @@ namespace UWPShoutcastMSS.Streaming
             this.socketReader = result.socketReader;
             this.socketWriter = result.socketWriter;
 
+            cancelTokenSource = new CancellationTokenSource();
+
             streamProcessor = new ShoutcastStreamProcessor(this, socket, socketReader, socketWriter);
         }
 
@@ -246,7 +257,11 @@ namespace UWPShoutcastMSS.Streaming
                 //Event handlers must have been disconnected already. Continue anyway.
             }
 
+            cancelTokenSource.Cancel();
+
             DisconnectSockets();
+
+            cancelTokenSource.Dispose();
         }
 
         private void DisconnectSockets()
@@ -333,7 +348,9 @@ namespace UWPShoutcastMSS.Streaming
 
         private async Task ReadSampleAsync(MediaStreamSourceSampleRequest request)
         {
-            var sample = await streamProcessor.GetNextSampleAsync();
+            var sample = await streamProcessor.GetNextSampleAsync(cancelTokenSource.Token);
+
+            if (cancelTokenSource.IsCancellationRequested) return;
 
             if (sample != null)
                 request.Sample = sample;

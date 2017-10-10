@@ -37,9 +37,11 @@ namespace UWPShoutcastMSS.Streaming
 
         }
 
-        private async Task HandleMetadataAsync()
+        private async Task HandleMetadataAsync(CancellationToken cancelToken)
         {
             if (!shoutcastStream.serverSettings.RequestSongMetdata) return;
+
+            cancelToken.ThrowIfCancellationRequested();
 
             if (metadataPos == shoutcastStream.metadataInt)
             {
@@ -56,6 +58,8 @@ namespace UWPShoutcastMSS.Streaming
                         try
                         {
                             uint metaDataInfo = metaInt * 16;
+
+                            cancelToken.ThrowIfCancellationRequested();
 
                             await socketReader.LoadAsync((uint)metaDataInfo);
 
@@ -82,6 +86,8 @@ namespace UWPShoutcastMSS.Streaming
                         }
                     }
 
+                    cancelToken.ThrowIfCancellationRequested();
+                    
                     //byteOffset = 0;
                 }
             }
@@ -124,12 +130,14 @@ namespace UWPShoutcastMSS.Streaming
             });
         }
 
-        internal async Task<MediaStreamSample> GetNextSampleAsync()
+        internal async Task<MediaStreamSample> GetNextSampleAsync(CancellationToken cancelToken)
         {
             if (sampleProvider == null)
                 sampleProvider = AudioProviderFactory.GetAudioProvider(shoutcastStream.AudioInfo.AudioFormat);
 
             //todo check for internet connection and socket connection as well
+
+            cancelToken.ThrowIfCancellationRequested();
 
             MediaStreamSample sample = null;
             uint sampleLength = 0;
@@ -147,13 +155,17 @@ namespace UWPShoutcastMSS.Streaming
                 Tuple<MediaStreamSample, uint> result = await sampleProvider.ParseSampleAsync(this, socketReader, partial: true, partialBytes: partialFrame);
                 sample = result.Item1;
                 sampleLength = result.Item2;
+
+                cancelToken.ThrowIfCancellationRequested();
             }
             else
             {
-                await HandleMetadataAsync();
+                await HandleMetadataAsync(cancelToken);
                 Tuple<MediaStreamSample, uint> result = await sampleProvider.ParseSampleAsync(this, socketReader);
                 sample = result.Item1;
                 sampleLength = result.Item2;
+
+                cancelToken.ThrowIfCancellationRequested();
 
                 if (sample == null || sampleLength == 0) //OLD bug: on RELEASE builds, sample.Buffer causes the app to die due to a possible .NET Native bug
                 {
