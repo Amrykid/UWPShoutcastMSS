@@ -253,22 +253,46 @@ namespace UWPShoutcastMSS.Streaming
         {
             streamProcessor = null;
 
-            if (socketWriter != null)
+            try
             {
-                socketWriter.DetachStream();
-                socketWriter.Dispose();
+                if (socketWriter != null)
+                {
+                    socketWriter.DetachStream();
+                    socketWriter.Dispose();
+                    socketWriter = null;
+                }
+            }
+            catch (Exception)
+            {
                 socketWriter = null;
             }
 
-            if (socketReader != null)
+            try
             {
-                socketReader.DetachStream();
-                socketReader.Dispose();
+                if (socketReader != null)
+                {
+                    socketReader.DetachStream();
+                    socketReader.Dispose();
+                    socketReader = null;
+                }
+            }
+            catch (Exception)
+            {
                 socketReader = null;
             }
 
-            socket?.Dispose();
-            socket = null;
+            if (socket != null)
+            {
+                try
+                {
+                    socket.Dispose();
+                }
+                catch (ObjectDisposedException)
+                {
+                    
+                }
+                socket = null;
+            }
         }
 
         private async void MediaStreamSource_SampleRequested(MediaStreamSource sender, MediaStreamSourceSampleRequestedEventArgs args)
