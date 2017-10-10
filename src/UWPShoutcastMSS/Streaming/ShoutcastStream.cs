@@ -32,6 +32,7 @@ namespace UWPShoutcastMSS.Streaming
         private ShoutcastServerType serverType;
         private AudioEncodingProperties audioProperties = null;
         private DateTime? lastPauseTime = null;
+        private volatile bool isDisposed = false;
 
         internal ShoutcastStream(Uri serverUrl, ShoutcastStreamFactoryConnectionSettings settings, StreamSocket socket, DataReader socketReader, DataWriter socketWriter)
         {
@@ -231,6 +232,8 @@ namespace UWPShoutcastMSS.Streaming
 
         public void Disconnect()
         {
+            if (isDisposed) throw new System.ObjectDisposedException(typeof(ShoutcastStream).Name); 
+
             try
             {
                 MediaStreamSource.Starting -= MediaStreamSource_Starting;
@@ -314,7 +317,20 @@ namespace UWPShoutcastMSS.Streaming
 
         public void Dispose()
         {
-            Disconnect();
+            if (isDisposed) return;
+
+            try 
+            {
+                Disconnect();
+            } 
+            catch (Exception)
+            {
+
+            }
+            finally
+            {
+                isDisposed = true;
+            }
         }
     }
 }
