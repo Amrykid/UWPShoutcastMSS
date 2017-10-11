@@ -134,7 +134,7 @@ namespace UWPShoutcastMSS.Streaming
             //loop until we receive a few "frames" with identical information.
             while (true)
             {
-                if (cancelTokenSource.IsCancellationRequested) return;
+                cancelTokenSource.Token.ThrowIfCancellationRequested();
 
                 ServerAudioInfo secondFrame = await provider.GrabFrameInfoAsync(streamProcessor, AudioInfo);
 
@@ -153,7 +153,7 @@ namespace UWPShoutcastMSS.Streaming
                 }
             }
 
-            if (cancelTokenSource.IsCancellationRequested) return;
+            cancelTokenSource.Token.ThrowIfCancellationRequested();
 
             if (AudioInfo.AudioFormat == StreamAudioFormat.MP3)
             {
