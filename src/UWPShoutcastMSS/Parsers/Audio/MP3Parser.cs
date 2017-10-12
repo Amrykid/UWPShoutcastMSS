@@ -288,6 +288,10 @@ namespace UWPShoutcastMSS.Parsers.Audio
             {
                 sampleRateTable = new int[] { 11025, 12000, 8000 };
             }
+            else
+            {
+                return int.MinValue; //should make this header invalid
+            }
 
             byte data = header[2];
 

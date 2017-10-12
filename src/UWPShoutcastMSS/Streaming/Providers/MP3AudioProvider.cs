@@ -44,10 +44,10 @@ namespace UWPShoutcastMSS.Streaming.Providers
                     }
                     else
                     {
+                        audioInfo.HeaderData = header;
                         audioInfo.SampleRate = (uint)MP3Parser.GetSampleRate(header);
                         audioInfo.ChannelCount = (uint)MP3Parser.GetChannelCount(header);
                         audioInfo.BitRate = (uint)MP3Parser.GetBitRate(header);
-                        audioInfo.HeaderData = header;
                         break;
                     }
                 }
