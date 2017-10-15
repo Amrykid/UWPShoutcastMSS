@@ -150,6 +150,13 @@ namespace UWPShoutcastMSS.Streaming
                 //parse part of the frame.
                 byte[] partialFrame = new byte[shoutcastStream.metadataInt - metadataPos];
                 var read = await socketReader.LoadAsync(shoutcastStream.metadataInt - metadataPos);
+
+                if (read == 0 || read < partialFrame.Length)
+                {
+                    //disconnected.
+                    throw new ShoutcastDisconnectionException();
+                }
+
                 socketReader.ReadBytes(partialFrame);
                 metadataPos += shoutcastStream.metadataInt - metadataPos;
                 Tuple<MediaStreamSample, uint> result = await sampleProvider.ParseSampleAsync(this, socketReader, partial: true, partialBytes: partialFrame);

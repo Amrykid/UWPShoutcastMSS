@@ -245,14 +245,19 @@ namespace UWPShoutcastMSS.Streaming
 
         public void Disconnect()
         {
-            if (isDisposed) throw new System.ObjectDisposedException(typeof(ShoutcastStream).Name); 
+            if (isDisposed) throw new System.ObjectDisposedException(typeof(ShoutcastStream).Name);
+
+            try
+            {
+                MediaStreamSource.SampleRequested -= MediaStreamSource_SampleRequested;
+            }
+            catch (ArgumentException) { }
 
             try
             {
                 MediaStreamSource.Starting -= MediaStreamSource_Starting;
                 MediaStreamSource.Closed -= MediaStreamSource_Closed;
                 MediaStreamSource.Paused -= MediaStreamSource_Paused;
-                MediaStreamSource.SampleRequested -= MediaStreamSource_SampleRequested;
             }
             catch (ArgumentException)
             {
@@ -326,6 +331,12 @@ namespace UWPShoutcastMSS.Streaming
                 {
                     await ReadSampleAsync(request);
                     cancelTokenSource.Token.ThrowIfCancellationRequested();
+                }
+                catch (ShoutcastDisconnectionException)
+                {
+                    //Reset and reconnect.
+                    DisconnectSockets();
+                    connected = false;
                 }
                 catch (COMException ex)
                 {

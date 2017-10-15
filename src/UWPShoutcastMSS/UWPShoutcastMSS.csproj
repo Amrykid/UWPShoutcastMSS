@@ -116,6 +116,7 @@
     <Compile Include="Streaming\ServerAudioInfo.cs" />
     <Compile Include="Streaming\Legacy\ShoutcastMediaSourceManager.cs" />
     <Compile Include="Streaming\Legacy\ShoutcastMediaSourceStreamMetadataChangedEventArgs.cs" />
+    <Compile Include="Streaming\ShoutcastDisconnectionException.cs" />
     <Compile Include="Streaming\ShoutcastServerType.cs" />
     <Compile Include="Streaming\ServerStationInfo.cs" />
     <Compile Include="Streaming\ShoutcastStream.cs" />
