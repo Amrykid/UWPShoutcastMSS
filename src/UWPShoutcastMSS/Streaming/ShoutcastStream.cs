@@ -229,6 +229,8 @@ namespace UWPShoutcastMSS.Streaming
 
         private async Task ReconnectSocketsAsync()
         {
+            cancelTokenSource.Token.ThrowIfCancellationRequested();
+
             var result = await ShoutcastStreamFactory.ConnectInternalAsync(serverUrl,
                 serverSettings);
 
@@ -315,35 +317,48 @@ namespace UWPShoutcastMSS.Streaming
             var request = args.Request;
             var deferral = request.GetDeferral();
             bool connected = true;
+
             try
             {
-                await ReadSampleAsync(request);
-            }
-            catch (COMException ex)
-            {
-                //Usually this is thrown when we get disconnected because of inactivity.
-                //Reset and reconnect.
-                DisconnectSockets();
-                connected = false;
-            }
+                cancelTokenSource.Token.ThrowIfCancellationRequested();
 
-            if (!connected)
-            {
                 try
                 {
-                    await ReconnectSocketsAsync();
-                    Reconnected?.Invoke(this, EventArgs.Empty);
-
                     await ReadSampleAsync(request);
+                    cancelTokenSource.Token.ThrowIfCancellationRequested();
                 }
-                catch (Exception)
+                catch (COMException ex)
                 {
-                    MediaStreamSource.NotifyError(MediaStreamSourceErrorStatus.ConnectionToServerLost);
+                    //Usually this is thrown when we get disconnected because of inactivity.
+                    //Reset and reconnect.
+                    DisconnectSockets();
+                    connected = false;
+                }
+
+                cancelTokenSource.Token.ThrowIfCancellationRequested();
+                if (!connected)
+                {
+                    try
+                    {
+                        await ReconnectSocketsAsync();
+                        Reconnected?.Invoke(this, EventArgs.Empty);
+
+                        await ReadSampleAsync(request);
+                    }
+                    catch (Exception)
+                    {
+                        MediaStreamSource.NotifyError(MediaStreamSourceErrorStatus.ConnectionToServerLost);
+                    }
                 }
             }
+            catch (OperationCanceledException)
+            {
 
-
-            deferral.Complete();
+            }
+            finally
+            {
+                deferral.Complete();
+            }
         }
 
         private async Task ReadSampleAsync(MediaStreamSourceSampleRequest request)
