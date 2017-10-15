@@ -159,7 +159,7 @@ namespace UWPShoutcastMSS.Streaming
 
                 socketReader.ReadBytes(partialFrame);
                 metadataPos += shoutcastStream.metadataInt - metadataPos;
-                Tuple<MediaStreamSample, uint> result = await sampleProvider.ParseSampleAsync(this, socketReader, partial: true, partialBytes: partialFrame);
+                Tuple<MediaStreamSample, uint> result = await sampleProvider.ParseSampleAsync(this, socketReader, partial: true, partialBytes: partialFrame).ConfigureAwait(false);
                 sample = result.Item1;
                 sampleLength = result.Item2;
 
@@ -168,7 +168,7 @@ namespace UWPShoutcastMSS.Streaming
             else
             {
                 await HandleMetadataAsync(cancelToken);
-                Tuple<MediaStreamSample, uint> result = await sampleProvider.ParseSampleAsync(this, socketReader);
+                Tuple<MediaStreamSample, uint> result = await sampleProvider.ParseSampleAsync(this, socketReader).ConfigureAwait(false);
                 sample = result.Item1;
                 sampleLength = result.Item2;
 

@@ -100,12 +100,12 @@ namespace UWPShoutcastMSS.Streaming
                 {
                     //something is missing from audio-info so we need to fallback.
 
-                    audioProperties = await ParseEncodingFromMediaAsync();
+                    audioProperties = await ParseEncodingFromMediaAsync().ConfigureAwait(false);
                 }
             }
             else
             {
-                audioProperties = await ParseEncodingFromMediaAsync();
+                audioProperties = await ParseEncodingFromMediaAsync().ConfigureAwait(false);
             }
         }
 
@@ -129,14 +129,14 @@ namespace UWPShoutcastMSS.Streaming
 
             var provider = AudioProviderFactory.GetAudioProvider(AudioInfo.AudioFormat);
 
-            ServerAudioInfo firstFrame = await provider.GrabFrameInfoAsync(streamProcessor, AudioInfo);
+            ServerAudioInfo firstFrame = await provider.GrabFrameInfoAsync(streamProcessor, AudioInfo).ConfigureAwait(false);
 
             //loop until we receive a few "frames" with identical information.
             while (true)
             {
                 cancelTokenSource.Token.ThrowIfCancellationRequested();
 
-                ServerAudioInfo secondFrame = await provider.GrabFrameInfoAsync(streamProcessor, AudioInfo);
+                ServerAudioInfo secondFrame = await provider.GrabFrameInfoAsync(streamProcessor, AudioInfo).ConfigureAwait(false);
 
                 if (firstFrame.BitRate == secondFrame.BitRate
                     && firstFrame.SampleRate == secondFrame.SampleRate)
@@ -329,7 +329,7 @@ namespace UWPShoutcastMSS.Streaming
 
                 try
                 {
-                    await ReadSampleAsync(request);
+                    await ReadSampleAsync(request).ConfigureAwait(false);
                     cancelTokenSource.Token.ThrowIfCancellationRequested();
                 }
                 catch (ShoutcastDisconnectionException)
@@ -351,10 +351,10 @@ namespace UWPShoutcastMSS.Streaming
                 {
                     try
                     {
-                        await ReconnectSocketsAsync();
+                        await ReconnectSocketsAsync().ConfigureAwait(false);
                         Reconnected?.Invoke(this, EventArgs.Empty);
 
-                        await ReadSampleAsync(request);
+                        await ReadSampleAsync(request).ConfigureAwait(false);
                     }
                     catch (Exception)
                     {
