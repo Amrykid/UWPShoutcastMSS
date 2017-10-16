@@ -89,7 +89,13 @@ namespace UWPShoutcastMSS.Streaming.Providers
             {
                 var read = await socketReader.LoadAsync(AAC_ADTSParser.aac_adts_sampleSize);
 
-                buffer = socketReader.ReadBuffer(read < AAC_ADTSParser.aac_adts_sampleSize ? read : AAC_ADTSParser.aac_adts_sampleSize);
+                if (read == 0 || read < AAC_ADTSParser.aac_adts_sampleSize)
+                {
+                    //disconnected.
+                    throw new ShoutcastDisconnectionException();
+                }
+
+                buffer = socketReader.ReadBuffer(AAC_ADTSParser.aac_adts_sampleSize);
 
                 //processor.byteOffset += AAC_ADTSParser.aac_adts_sampleSize;
                 sampleLength = AAC_ADTSParser.aac_adts_sampleSize;

@@ -86,7 +86,13 @@ namespace UWPShoutcastMSS.Streaming.Providers
             {
                 var read = await socketReader.LoadAsync(MP3Parser.mp3_sampleSize);
 
-                buffer = socketReader.ReadBuffer(read < MP3Parser.mp3_sampleSize ? read : MP3Parser.mp3_sampleSize);
+                if (read == 0 || read < MP3Parser.mp3_sampleSize)
+                {
+                    //disconnected.
+                    throw new ShoutcastDisconnectionException();
+                }
+
+                buffer = socketReader.ReadBuffer(MP3Parser.mp3_sampleSize);
 
                 //processor.byteOffset += MP3Parser.mp3_sampleSize;
 
