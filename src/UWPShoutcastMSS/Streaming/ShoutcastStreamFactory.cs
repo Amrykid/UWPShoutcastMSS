@@ -30,6 +30,7 @@ namespace UWPShoutcastMSS.Streaming
             ShoutcastStreamFactoryInternalConnectResult result = new ShoutcastStreamFactoryInternalConnectResult();
 
             result.socket = new StreamSocket();
+            result.socket.Control.QualityOfService = SocketQualityOfService.LowLatency;
 
             await result.socket.ConnectAsync(new Windows.Networking.HostName(serverUrl.Host), serverUrl.Port.ToString());
 
