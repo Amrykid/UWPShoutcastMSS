@@ -366,6 +366,10 @@ namespace UWPShoutcastMSS.Streaming
             {
 
             }
+            catch (Exception)
+            {
+                MediaStreamSource.NotifyError(MediaStreamSourceErrorStatus.Other);
+            }
             finally
             {
                 deferral.Complete();
