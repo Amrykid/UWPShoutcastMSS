@@ -10,7 +10,7 @@ namespace UWPShoutcastMSS.Streaming.Sockets
     {
         internal static SocketWrapper CreateSocketWrapper(ShoutcastStreamFactory.ShoutcastStreamFactoryInternalConnectResult result)
         {
-            var transferEncoding = result.httpResponseHeaders.FirstOrDefault(x => x.Key.ToLower() == "transfer-encoding").Value.Trim() ?? "identity";
+            var transferEncoding = result.httpResponseHeaders.FirstOrDefault(x => x.Key.ToLower() == "transfer-encoding").Value?.Trim() ?? "identity";
 
             switch(transferEncoding)
             {

@@ -129,11 +129,13 @@ namespace UWPShoutcastMSS.Streaming
                             return await ConnectAsync(action.ActionUrl, settings);
                         }
                     default:
+                        socketWrapper.Dispose();
                         throw new Exception("We weren't able to connect for some reason.");
                 }
             }
             else
             {
+                socketWrapper.Dispose();
                 throw new Exception("We weren't able to connect for some reason.");
             }
         }

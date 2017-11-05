@@ -80,7 +80,7 @@ namespace TestApp
 
             if (selectedStation != null)
             {
-                
+
                 try
                 {
                     shoutcastStream = await ShoutcastStreamFactory.ConnectAsync(selectedStation.Url,
@@ -101,7 +101,22 @@ namespace TestApp
                     playButton.IsEnabled = true;
                     stationComboBox.IsEnabled = true;
                     stopButton.IsEnabled = false;
-                    
+
+                    if (shoutcastStream != null)
+                    {
+                        try
+                        {
+                            shoutcastStream.Disconnect();
+                        }
+                        catch (Exception)
+                        {
+
+                        }
+                        finally
+                        {
+                            shoutcastStream.Dispose();
+                        }
+                    }
 
                     MessageDialog dialog = new MessageDialog("Unable to connect!");
                     await dialog.ShowAsync();
