@@ -26,6 +26,12 @@ namespace UWPShoutcastMSS.Streaming.Sockets
             SocketDataReader = new DataReader(bufferStream.CloneStream().GetInputStreamAt(0));
 
             InitializeDataStream();
+
+            Task.Delay(3000).ContinueWith(x =>
+            {
+                //wait 3 seconds and then allow streaming to proceed.
+                InitialBufferLock.Release(1);
+            });
         }
 
         protected override void SubclassDispose()

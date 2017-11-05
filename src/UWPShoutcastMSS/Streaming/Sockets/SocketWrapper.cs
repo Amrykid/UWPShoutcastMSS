@@ -2,17 +2,19 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Windows.Networking.Sockets;
 using Windows.Storage.Streams;
 
 namespace UWPShoutcastMSS.Streaming.Sockets
 {
-    public class SocketWrapper: IDisposable
+    public class SocketWrapper : IDisposable
     {
         protected StreamSocket BaseSocket { get; set; }
         protected DataReader SocketDataReader { get; set; }
         protected DataWriter SocketDataWriter { get; set; }
+        protected SemaphoreSlim InitialBufferLock { get; set; } = new SemaphoreSlim(0, 1);
         public SocketWrapper(StreamSocket baseSocket, DataReader dataReader, DataWriter dataWriter)
         {
             if (baseSocket == null)
@@ -29,6 +31,13 @@ namespace UWPShoutcastMSS.Streaming.Sockets
             SocketDataWriter = dataWriter;
 
             InitializeDataStream();
+
+            InitialBufferLock.Release(1);
+        }
+
+        public Task WaitForInitialBufferReadyAsync()
+        {
+            return InitialBufferLock.WaitAsync();
         }
 
         protected SocketWrapper()
@@ -38,35 +47,48 @@ namespace UWPShoutcastMSS.Streaming.Sockets
 
         protected virtual void InitializeDataStream()
         {
-           
+
         }
 
         public virtual uint UnconsumedBufferLength { get { return SocketDataReader != null ? SocketDataReader.UnconsumedBufferLength : uint.MaxValue; } }
 
-        public virtual DataReaderLoadOperation LoadAsync(uint amount)
+        public virtual async Task<uint> LoadAsync(uint amount)
         {
-            return SocketDataReader.LoadAsync(amount);
+            await WaitForInitialBufferReadyAsync();
+            var result = await SocketDataReader.LoadAsync(amount);
+            InitialBufferLock.Release();
+            return result;
         }
 
-        public virtual Task<string> ReadStringAsync(uint codeUnitCount)
+        public virtual async Task<string> ReadStringAsync(uint codeUnitCount)
         {
-            return Task.FromResult<string>(SocketDataReader.ReadString(codeUnitCount));
+            await WaitForInitialBufferReadyAsync();
+            var result = SocketDataReader.ReadString(codeUnitCount);
+            InitialBufferLock.Release();
+            return result;
         }
 
-        public virtual Task<IBuffer> ReadBufferAsync(uint length)
+        public virtual async Task<IBuffer> ReadBufferAsync(uint length)
         {
-            return Task.FromResult<IBuffer>(SocketDataReader.ReadBuffer(length));
+            await WaitForInitialBufferReadyAsync();
+            var result = SocketDataReader.ReadBuffer(length);
+            InitialBufferLock.Release();
+            return result;
         }
 
-        public virtual Task<byte> ReadByteAsync()
+        public virtual async Task<byte> ReadByteAsync()
         {
-            return Task.FromResult<byte>(SocketDataReader.ReadByte());
+            await WaitForInitialBufferReadyAsync();
+            var result = SocketDataReader.ReadByte();
+            InitialBufferLock.Release();
+            return result;
         }
 
-        public virtual Task ReadBytesAsync(byte[] buffer)
+        public virtual async Task ReadBytesAsync(byte[] buffer)
         {
+            await WaitForInitialBufferReadyAsync();
             SocketDataReader.ReadBytes(buffer);
-            return Task.CompletedTask;
+            InitialBufferLock.Release();
         }
 
 
