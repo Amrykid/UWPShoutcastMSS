@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using UWPShoutcastMSS.Streaming.Sockets;
 using Windows.Networking.Sockets;
 using Windows.Storage.Streams;
 
@@ -94,7 +95,9 @@ namespace UWPShoutcastMSS.Streaming
 
             ShoutcastStreamFactoryInternalConnectResult result = await ConnectInternalAsync(serverUrl, settings);
 
-            shoutStream = new ShoutcastStream(serverUrl, settings, result.socket, result.socketReader, result.socketWriter);
+            SocketWrapper socketWrapper = new SocketWrapper(result.socket, result.socketReader, result.socketWriter); //todo, get based on transfer-encoding.
+
+            shoutStream = new ShoutcastStream(serverUrl, settings, socketWrapper);
 
             string httpLine = result.httpResponse.Substring(0, result.httpResponse.IndexOf('\n')).Trim();
 

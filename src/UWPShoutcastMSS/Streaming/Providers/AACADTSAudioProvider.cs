@@ -5,6 +5,7 @@ using System.Runtime.InteropServices.WindowsRuntime;
 using System.Text;
 using System.Threading.Tasks;
 using UWPShoutcastMSS.Parsers.Audio;
+using UWPShoutcastMSS.Streaming.Sockets;
 using Windows.Media.Core;
 using Windows.Storage.Streams;
 
@@ -73,7 +74,7 @@ namespace UWPShoutcastMSS.Streaming.Providers
         public uint HeaderLength => AAC_ADTSParser.HeaderLength;
 
         public async Task<Tuple<MediaStreamSample, uint>> ParseSampleAsync(ShoutcastStreamProcessor processor,
-            DataReader socketReader, bool partial = false, byte[] partialBytes = null)
+            SocketWrapper socket, bool partial = false, byte[] partialBytes = null)
         {
             IBuffer buffer = null;
             MediaStreamSample sample = null;
@@ -87,7 +88,7 @@ namespace UWPShoutcastMSS.Streaming.Providers
             }
             else
             {
-                var read = await socketReader.LoadAsync(AAC_ADTSParser.aac_adts_sampleSize);
+                var read = await socket.LoadAsync(AAC_ADTSParser.aac_adts_sampleSize);
 
                 if (read == 0 || read < AAC_ADTSParser.aac_adts_sampleSize)
                 {
@@ -95,7 +96,7 @@ namespace UWPShoutcastMSS.Streaming.Providers
                     throw new ShoutcastDisconnectionException();
                 }
 
-                buffer = socketReader.ReadBuffer(AAC_ADTSParser.aac_adts_sampleSize);
+                buffer = await socket.ReadBufferAsync(AAC_ADTSParser.aac_adts_sampleSize);
 
                 //processor.byteOffset += AAC_ADTSParser.aac_adts_sampleSize;
                 sampleLength = AAC_ADTSParser.aac_adts_sampleSize;

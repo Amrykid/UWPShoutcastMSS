@@ -11,6 +11,7 @@ using System.Runtime.InteropServices.WindowsRuntime;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading;
+using UWPShoutcastMSS.Streaming.Sockets;
 
 namespace UWPShoutcastMSS.Streaming
 {
@@ -25,10 +26,8 @@ namespace UWPShoutcastMSS.Streaming
 
         private ShoutcastStreamProcessor streamProcessor = null;
         internal uint metadataInt = 100;
-        private StreamSocket socket;
-        private DataReader socketReader;
-        private DataWriter socketWriter;
         private Uri serverUrl;
+        private SocketWrapper socket;
         internal ShoutcastStreamFactoryConnectionSettings serverSettings;
         private ShoutcastServerType serverType;
         private AudioEncodingProperties audioProperties = null;
@@ -36,11 +35,9 @@ namespace UWPShoutcastMSS.Streaming
         private volatile bool isDisposed = false;
         private CancellationTokenSource cancelTokenSource = null;
 
-        internal ShoutcastStream(Uri serverUrl, ShoutcastStreamFactoryConnectionSettings settings, StreamSocket socket, DataReader socketReader, DataWriter socketWriter)
+        internal ShoutcastStream(Uri serverUrl, ShoutcastStreamFactoryConnectionSettings settings, SocketWrapper socketWrapper)
         {
-            this.socket = socket;
-            this.socketReader = socketReader;
-            this.socketWriter = socketWriter;
+            this.socket = socketWrapper;
             this.serverUrl = serverUrl;
             this.serverSettings = settings;
 
@@ -48,7 +45,7 @@ namespace UWPShoutcastMSS.Streaming
             AudioInfo = new ServerAudioInfo();
             cancelTokenSource = new CancellationTokenSource();
             //MediaStreamSource = new MediaStreamSource(null);
-            streamProcessor = new ShoutcastStreamProcessor(this, socket, socketReader, socketWriter);
+            streamProcessor = new ShoutcastStreamProcessor(this, socket);
         }
 
         private async Task DetectAudioEncodingPropertiesAsync(KeyValuePair<string, string>[] headers)
@@ -158,8 +155,8 @@ namespace UWPShoutcastMSS.Streaming
             if (AudioInfo.AudioFormat == StreamAudioFormat.MP3)
             {
                 //skip the entire first frame/sample to get back on track
-                await socketReader.LoadAsync(MP3Parser.mp3_sampleSize - MP3Parser.HeaderLength);
-                buffer = socketReader.ReadBuffer(MP3Parser.mp3_sampleSize - MP3Parser.HeaderLength);
+                await socket.LoadAsync(MP3Parser.mp3_sampleSize - MP3Parser.HeaderLength);
+                buffer = await socket.ReadBufferAsync(MP3Parser.mp3_sampleSize - MP3Parser.HeaderLength);
                 //streamProcessor.byteOffset += MP3Parser.mp3_sampleSize - MP3Parser.HeaderLength;
 
 
@@ -168,8 +165,8 @@ namespace UWPShoutcastMSS.Streaming
             else if (AudioInfo.AudioFormat == StreamAudioFormat.AAC_ADTS)
             {
                 //skip the entire first frame/sample to get back on track
-                await socketReader.LoadAsync(AAC_ADTSParser.aac_adts_sampleSize - AAC_ADTSParser.HeaderLength);
-                buffer = socketReader.ReadBuffer(AAC_ADTSParser.aac_adts_sampleSize - AAC_ADTSParser.HeaderLength);
+                await socket.LoadAsync(AAC_ADTSParser.aac_adts_sampleSize - AAC_ADTSParser.HeaderLength);
+                buffer = await socket.ReadBufferAsync(AAC_ADTSParser.aac_adts_sampleSize - AAC_ADTSParser.HeaderLength);
                 //streamProcessor.byteOffset += AAC_ADTSParser.aac_adts_sampleSize - AAC_ADTSParser.HeaderLength;
 
                 obtainedProperties = AudioEncodingProperties.CreateAacAdts((uint)AudioInfo.SampleRate, (uint)AudioInfo.ChannelCount, AudioInfo.BitRate);
@@ -234,13 +231,11 @@ namespace UWPShoutcastMSS.Streaming
             var result = await ShoutcastStreamFactory.ConnectInternalAsync(serverUrl,
                 serverSettings);
 
-            this.socket = result.socket;
-            this.socketReader = result.socketReader;
-            this.socketWriter = result.socketWriter;
+            this.socket = new SocketWrapper(result.socket, result.socketReader, result.socketWriter); //todo figure out based on transfer encoding.
 
             cancelTokenSource = new CancellationTokenSource();
 
-            streamProcessor = new ShoutcastStreamProcessor(this, socket, socketReader, socketWriter);
+            streamProcessor = new ShoutcastStreamProcessor(this, socket);
         }
 
         public void Disconnect()
@@ -274,34 +269,6 @@ namespace UWPShoutcastMSS.Streaming
         private void DisconnectSockets()
         {
             streamProcessor = null;
-
-            try
-            {
-                if (socketWriter != null)
-                {
-                    socketWriter.DetachStream();
-                    socketWriter.Dispose();
-                    socketWriter = null;
-                }
-            }
-            catch (Exception)
-            {
-                socketWriter = null;
-            }
-
-            try
-            {
-                if (socketReader != null)
-                {
-                    socketReader.DetachStream();
-                    socketReader.Dispose();
-                    socketReader = null;
-                }
-            }
-            catch (Exception)
-            {
-                socketReader = null;
-            }
 
             if (socket != null)
             {
