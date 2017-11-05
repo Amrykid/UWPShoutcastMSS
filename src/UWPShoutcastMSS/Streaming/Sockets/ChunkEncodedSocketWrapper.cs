@@ -9,6 +9,7 @@ namespace UWPShoutcastMSS.Streaming.Sockets
     internal class ChunkEncodedSocketWrapper : SocketWrapper
     {
         private InMemoryRandomAccessStream bufferStream = null;
+        private IRandomAccessStream clonedBufferStream = null;
         private CancellationTokenSource bufferTaskCancelTokenSource = null;
         private Task bufferTask = null;
         private DataReader rawDataReader = null;
@@ -23,7 +24,9 @@ namespace UWPShoutcastMSS.Streaming.Sockets
             bufferTask = Task.Run(function: ProcessStreamChunksAsync, cancellationToken: bufferTaskCancelTokenSource.Token);
 
             rawDataReader = dataReader;
-            SocketDataReader = new DataReader(bufferStream.CloneStream().GetInputStreamAt(0));
+
+            clonedBufferStream = bufferStream.CloneStream();
+            SocketDataReader = new DataReader(clonedBufferStream.GetInputStreamAt(0));
 
             InitializeDataStream();
 
@@ -38,6 +41,9 @@ namespace UWPShoutcastMSS.Streaming.Sockets
         {
             bufferTaskCancelTokenSource.Cancel();
             bufferTaskCancelTokenSource.Dispose();
+
+            clonedBufferStream.Dispose();
+            bufferStream.Dispose();
         }
 
         private async Task<int> ParseChunkLengthAsync()

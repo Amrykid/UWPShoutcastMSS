@@ -50,7 +50,7 @@ namespace TestApp
                 },
                 new StationItem
                 {
-                    Name = "R/a/dio",
+                    Name = "R/a/dio (MP3, 192kb, chunk-encoded)",
                     Url = new Uri("http://relay0.r-a-d.io/main.mp3"),
                     RelativePath = ""
                 }
