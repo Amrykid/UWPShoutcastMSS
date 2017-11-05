@@ -123,6 +123,9 @@
     <Compile Include="Streaming\ShoutcastStreamFactory.cs" />
     <Compile Include="Streaming\ShoutcastStreamFactoryConnectionSettings.cs" />
     <Compile Include="Streaming\ShoutcastStreamProcessor.cs" />
+    <Compile Include="Streaming\Sockets\ChunkEncodedSocketWrapper.cs" />
+    <Compile Include="Streaming\Sockets\SocketWrapper.cs" />
+    <Compile Include="Streaming\Sockets\SocketWrapperFactory.cs" />
     <EmbeddedResource Include="Properties\UWPShoutcastMSS.rd.xml" />
   </ItemGroup>
   <ItemGroup>

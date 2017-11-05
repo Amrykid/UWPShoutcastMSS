@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using UWPShoutcastMSS.Parsers.Audio;
 using UWPShoutcastMSS.Streaming.Providers;
+using UWPShoutcastMSS.Streaming.Sockets;
 using Windows.Media.Core;
 using Windows.Networking.Sockets;
 using Windows.Storage.Streams;
@@ -16,9 +17,7 @@ namespace UWPShoutcastMSS.Streaming
     internal class ShoutcastStreamProcessor
     {
         private ShoutcastStream shoutcastStream;
-        private StreamSocket socket;
-        private DataReader socketReader;
-        private DataWriter socketWriter;
+        private SocketWrapper socket;
         private Task processingTask = null;
         private CancellationTokenSource processingTaskCancel = null;
         private volatile bool isRunning = false;
@@ -28,13 +27,10 @@ namespace UWPShoutcastMSS.Streaming
         private ConcurrentQueue<MediaStreamSample> sampleQueue = null;
         private IAudioProvider sampleProvider = null;
 
-        public ShoutcastStreamProcessor(ShoutcastStream shoutcastStream, StreamSocket socket, DataReader socketReader, DataWriter socketWriter)
+        public ShoutcastStreamProcessor(ShoutcastStream shoutcastStream, SocketWrapper socket)
         {
             this.shoutcastStream = shoutcastStream;
             this.socket = socket;
-            this.socketReader = socketReader;
-            this.socketWriter = socketWriter;
-
         }
 
         private async Task HandleMetadataAsync(CancellationToken cancelToken)
@@ -47,11 +43,11 @@ namespace UWPShoutcastMSS.Streaming
             {
                 metadataPos = 0;
 
-                await socketReader.LoadAsync(1);
+                await socket.LoadAsync(1);
 
-                if (socketReader.UnconsumedBufferLength > 0)
+                if (socket.UnconsumedBufferLength > 0)
                 {
-                    uint metaInt = socketReader.ReadByte();
+                    uint metaInt = await socket.ReadByteAsync();
 
                     if (metaInt > 0)
                     {
@@ -61,9 +57,9 @@ namespace UWPShoutcastMSS.Streaming
 
                             cancelToken.ThrowIfCancellationRequested();
 
-                            await socketReader.LoadAsync((uint)metaDataInfo);
+                            await socket.LoadAsync((uint)metaDataInfo);
 
-                            var metadata = socketReader.ReadString((uint)metaDataInfo);
+                            var metadata = await socket.ReadStringAsync((uint)metaDataInfo);
 
                             ParseSongMetadata(metadata);
                         }
@@ -149,7 +145,7 @@ namespace UWPShoutcastMSS.Streaming
             {
                 //parse part of the frame.
                 byte[] partialFrame = new byte[shoutcastStream.metadataInt - metadataPos];
-                var read = await socketReader.LoadAsync(shoutcastStream.metadataInt - metadataPos);
+                var read = await socket.LoadAsync(shoutcastStream.metadataInt - metadataPos);
 
                 if (read == 0 || read < partialFrame.Length)
                 {
@@ -157,9 +153,9 @@ namespace UWPShoutcastMSS.Streaming
                     throw new ShoutcastDisconnectionException();
                 }
 
-                socketReader.ReadBytes(partialFrame);
+                await socket.ReadBytesAsync(partialFrame);
                 metadataPos += shoutcastStream.metadataInt - metadataPos;
-                Tuple<MediaStreamSample, uint> result = await sampleProvider.ParseSampleAsync(this, socketReader, partial: true, partialBytes: partialFrame).ConfigureAwait(false);
+                Tuple<MediaStreamSample, uint> result = await sampleProvider.ParseSampleAsync(this, socket, partial: true, partialBytes: partialFrame).ConfigureAwait(false);
                 sample = result.Item1;
                 sampleLength = result.Item2;
 
@@ -168,7 +164,7 @@ namespace UWPShoutcastMSS.Streaming
             else
             {
                 await HandleMetadataAsync(cancelToken);
-                Tuple<MediaStreamSample, uint> result = await sampleProvider.ParseSampleAsync(this, socketReader).ConfigureAwait(false);
+                Tuple<MediaStreamSample, uint> result = await sampleProvider.ParseSampleAsync(this, socket).ConfigureAwait(false);
                 sample = result.Item1;
                 sampleLength = result.Item2;
 
@@ -198,13 +194,13 @@ namespace UWPShoutcastMSS.Streaming
 
         internal async Task<byte[]> ReadBytesFromSocketAsync(uint count)
         {
-            await socketReader.LoadAsync(count);
+            await socket.LoadAsync(count);
 
             byte[] result = new byte[count];
 
             for (int i = 0; i < count; i++)
             {
-                result[i] = socketReader.ReadByte();
+                result[i] = await socket.ReadByteAsync();
                 //byteOffset += 1;
                 if (shoutcastStream.serverSettings.RequestSongMetdata) metadataPos += 1;
             }

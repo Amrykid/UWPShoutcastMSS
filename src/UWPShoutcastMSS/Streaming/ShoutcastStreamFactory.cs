@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using UWPShoutcastMSS.Streaming.Sockets;
 using Windows.Networking.Sockets;
 using Windows.Storage.Streams;
 
@@ -16,6 +17,7 @@ namespace UWPShoutcastMSS.Streaming
             internal DataWriter socketWriter;
             internal DataReader socketReader;
             internal string httpResponse;
+            internal KeyValuePair<string, string>[] httpResponseHeaders;
         }
 
 
@@ -48,7 +50,6 @@ namespace UWPShoutcastMSS.Streaming
                 case "https":
                     portStr = serverUrl.Port != 443 ? ":" + serverUrl.Port : "";
                     throw new NotImplementedException("https streams are currently not supported.");
-                    break;
             }
 
             StringBuilder requestBuilder = new StringBuilder();
@@ -75,6 +76,9 @@ namespace UWPShoutcastMSS.Streaming
 
             result.httpResponse = response;
 
+            string[] responseSplitByLine = response.Split(new string[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries);
+            result.httpResponseHeaders = ParseHttpResponseToKeyPairArray(responseSplitByLine);
+
             return result;
         }
 
@@ -94,7 +98,9 @@ namespace UWPShoutcastMSS.Streaming
 
             ShoutcastStreamFactoryInternalConnectResult result = await ConnectInternalAsync(serverUrl, settings);
 
-            shoutStream = new ShoutcastStream(serverUrl, settings, result.socket, result.socketReader, result.socketWriter);
+            SocketWrapper socketWrapper = SocketWrapperFactory.CreateSocketWrapper(result);
+
+            shoutStream = new ShoutcastStream(serverUrl, settings, socketWrapper);
 
             string httpLine = result.httpResponse.Substring(0, result.httpResponse.IndexOf('\n')).Trim();
 
@@ -104,23 +110,33 @@ namespace UWPShoutcastMSS.Streaming
 
             //todo handle when we get a text/html page.
 
-            switch (action.ActionType)
-            {
-                case ConnectionActionType.Success:
-                    var headers = ParseResponse(result.httpResponse, shoutStream);
-                    await shoutStream.HandleHeadersAsync(headers);
-                    return shoutStream;
-                case ConnectionActionType.Fail:
-                    throw action.ActionException;
-                case ConnectionActionType.Redirect:
-                    {
-                        //clean up.
-                        shoutStream.Dispose();
 
-                        return await ConnectAsync(action.ActionUrl, settings);
-                    }
-                default:
-                    throw new Exception("We weren't able to connect for some reason.");
+            if (action != null)
+            {
+                switch (action.ActionType)
+                {
+                    case ConnectionActionType.Success:
+                        var headers = ParseResponse(result.httpResponse, shoutStream);
+                        await shoutStream.HandleHeadersAsync(headers);
+                        return shoutStream;
+                    case ConnectionActionType.Fail:
+                        throw action.ActionException;
+                    case ConnectionActionType.Redirect:
+                        {
+                            //clean up.
+                            shoutStream.Dispose();
+
+                            return await ConnectAsync(action.ActionUrl, settings);
+                        }
+                    default:
+                        socketWrapper.Dispose();
+                        throw new Exception("We weren't able to connect for some reason.");
+                }
+            }
+            else
+            {
+                socketWrapper.Dispose();
+                throw new Exception("We weren't able to connect for some reason.");
             }
         }
 
@@ -153,6 +169,9 @@ namespace UWPShoutcastMSS.Streaming
 
                             case 400: //bad request
                             case 404: return ConnectionAction.FromFailure();
+
+                            case 503: //server limit reached
+                                return ConnectionAction.FromFailure(new Exception("Server limit reached."));
 
                             case 302: //Found. Has the new location in the LOCATION header.
                                 {

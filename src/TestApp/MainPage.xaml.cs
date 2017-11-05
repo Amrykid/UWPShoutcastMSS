@@ -47,6 +47,12 @@ namespace TestApp
                 {
                     Name = "OZFM (AAC, 96kb)",
                     Url = new Uri("http://174.37.159.206:8262/stream")
+                },
+                new StationItem
+                {
+                    Name = "R/a/dio (MP3, 192kb, chunk-encoded)",
+                    Url = new Uri("http://relay0.r-a-d.io/main.mp3"),
+                    RelativePath = ""
                 }
             };
 
@@ -74,10 +80,14 @@ namespace TestApp
 
             if (selectedStation != null)
             {
-                
+
                 try
                 {
-                    shoutcastStream = await ShoutcastStreamFactory.ConnectAsync(selectedStation.Url);
+                    shoutcastStream = await ShoutcastStreamFactory.ConnectAsync(selectedStation.Url,
+                        new ShoutcastStreamFactoryConnectionSettings()
+                        {
+                            RelativePath = selectedStation.RelativePath
+                        });
                     shoutcastStream.MetadataChanged += StreamManager_MetadataChanged;
                     MediaPlayer.SetMediaStreamSource(shoutcastStream.MediaStreamSource);
                     MediaPlayer.Play();
@@ -91,7 +101,22 @@ namespace TestApp
                     playButton.IsEnabled = true;
                     stationComboBox.IsEnabled = true;
                     stopButton.IsEnabled = false;
-                    
+
+                    if (shoutcastStream != null)
+                    {
+                        try
+                        {
+                            shoutcastStream.Disconnect();
+                        }
+                        catch (Exception)
+                        {
+
+                        }
+                        finally
+                        {
+                            shoutcastStream.Dispose();
+                        }
+                    }
 
                     MessageDialog dialog = new MessageDialog("Unable to connect!");
                     await dialog.ShowAsync();

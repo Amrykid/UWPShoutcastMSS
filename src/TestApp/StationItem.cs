@@ -10,5 +10,6 @@ namespace TestApp
     {
         public string Name { get; set; }
         public Uri Url { get; set; }
+        public string RelativePath { get; internal set; } = ";";
     }
 }

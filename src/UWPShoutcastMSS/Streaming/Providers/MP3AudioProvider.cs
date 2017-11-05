@@ -5,6 +5,7 @@ using System.Runtime.InteropServices.WindowsRuntime;
 using System.Text;
 using System.Threading.Tasks;
 using UWPShoutcastMSS.Parsers.Audio;
+using UWPShoutcastMSS.Streaming.Sockets;
 using Windows.Media.Core;
 using Windows.Storage.Streams;
 
@@ -68,7 +69,7 @@ namespace UWPShoutcastMSS.Streaming.Providers
             return audioInfo;
         }
 
-        public async Task<Tuple<MediaStreamSample, uint>> ParseSampleAsync(ShoutcastStreamProcessor processor, DataReader socketReader, bool partial = false, byte[] partialBytes = null)
+        public async Task<Tuple<MediaStreamSample, uint>> ParseSampleAsync(ShoutcastStreamProcessor processor, SocketWrapper socket, bool partial = false, byte[] partialBytes = null)
         {
             //http://www.mpgedit.org/mpgedit/mpeg_format/MP3Format.html
 
@@ -84,7 +85,7 @@ namespace UWPShoutcastMSS.Streaming.Providers
             }
             else
             {
-                var read = await socketReader.LoadAsync(MP3Parser.mp3_sampleSize);
+                var read = await socket.LoadAsync(MP3Parser.mp3_sampleSize);
 
                 if (read == 0 || read < MP3Parser.mp3_sampleSize)
                 {
@@ -92,7 +93,7 @@ namespace UWPShoutcastMSS.Streaming.Providers
                     throw new ShoutcastDisconnectionException();
                 }
 
-                buffer = socketReader.ReadBuffer(MP3Parser.mp3_sampleSize);
+                buffer = await socket.ReadBufferAsync(MP3Parser.mp3_sampleSize);
 
                 //processor.byteOffset += MP3Parser.mp3_sampleSize;
 
