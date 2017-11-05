@@ -47,6 +47,12 @@ namespace TestApp
                 {
                     Name = "OZFM (AAC, 96kb)",
                     Url = new Uri("http://174.37.159.206:8262/stream")
+                },
+                new StationItem
+                {
+                    Name = "R/a/dio",
+                    Url = new Uri("http://relay0.r-a-d.io/main.mp3"),
+                    RelativePath = ""
                 }
             };
 
@@ -77,7 +83,11 @@ namespace TestApp
                 
                 try
                 {
-                    shoutcastStream = await ShoutcastStreamFactory.ConnectAsync(selectedStation.Url);
+                    shoutcastStream = await ShoutcastStreamFactory.ConnectAsync(selectedStation.Url,
+                        new ShoutcastStreamFactoryConnectionSettings()
+                        {
+                            RelativePath = selectedStation.RelativePath
+                        });
                     shoutcastStream.MetadataChanged += StreamManager_MetadataChanged;
                     MediaPlayer.SetMediaStreamSource(shoutcastStream.MediaStreamSource);
                     MediaPlayer.Play();

@@ -10,9 +10,9 @@ namespace UWPShoutcastMSS.Streaming.Sockets
 {
     public class SocketWrapper: IDisposable
     {
-        protected StreamSocket BaseSocket { get; private set; }
-        protected DataReader SocketDataReader { get; private set; }
-        protected DataWriter SocketDataWriter { get; private set; }
+        protected StreamSocket BaseSocket { get; set; }
+        protected DataReader SocketDataReader { get; set; }
+        protected DataWriter SocketDataWriter { get; set; }
         public SocketWrapper(StreamSocket baseSocket, DataReader dataReader, DataWriter dataWriter)
         {
             if (baseSocket == null)
@@ -29,6 +29,11 @@ namespace UWPShoutcastMSS.Streaming.Sockets
             SocketDataWriter = dataWriter;
 
             InitializeDataStream();
+        }
+
+        protected SocketWrapper()
+        {
+
         }
 
         protected virtual void InitializeDataStream()
@@ -65,6 +70,8 @@ namespace UWPShoutcastMSS.Streaming.Sockets
         }
 
 
+        protected virtual void SubclassDispose() { }
+
         #region IDisposable Support
         private bool disposedValue = false; // To detect redundant calls
 
@@ -75,6 +82,8 @@ namespace UWPShoutcastMSS.Streaming.Sockets
                 if (disposing)
                 {
                     // TODO: dispose managed state (managed objects).
+
+                    SubclassDispose();
 
                     SocketDataReader.Dispose();
                     SocketDataWriter.Dispose();
