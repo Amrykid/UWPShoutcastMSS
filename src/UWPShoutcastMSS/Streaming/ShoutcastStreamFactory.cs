@@ -107,23 +107,31 @@ namespace UWPShoutcastMSS.Streaming
 
             //todo handle when we get a text/html page.
 
-            switch (action.ActionType)
-            {
-                case ConnectionActionType.Success:
-                    var headers = ParseResponse(result.httpResponse, shoutStream);
-                    await shoutStream.HandleHeadersAsync(headers);
-                    return shoutStream;
-                case ConnectionActionType.Fail:
-                    throw action.ActionException;
-                case ConnectionActionType.Redirect:
-                    {
-                        //clean up.
-                        shoutStream.Dispose();
 
-                        return await ConnectAsync(action.ActionUrl, settings);
-                    }
-                default:
-                    throw new Exception("We weren't able to connect for some reason.");
+            if (action != null)
+            {
+                switch (action.ActionType)
+                {
+                    case ConnectionActionType.Success:
+                        var headers = ParseResponse(result.httpResponse, shoutStream);
+                        await shoutStream.HandleHeadersAsync(headers);
+                        return shoutStream;
+                    case ConnectionActionType.Fail:
+                        throw action.ActionException;
+                    case ConnectionActionType.Redirect:
+                        {
+                            //clean up.
+                            shoutStream.Dispose();
+
+                            return await ConnectAsync(action.ActionUrl, settings);
+                        }
+                    default:
+                        throw new Exception("We weren't able to connect for some reason.");
+                }
+            }
+            else
+            {
+                throw new Exception("We weren't able to connect for some reason.");
             }
         }
 
