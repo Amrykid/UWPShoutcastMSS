@@ -231,7 +231,7 @@ namespace UWPShoutcastMSS.Streaming
             var result = await ShoutcastStreamFactory.ConnectInternalAsync(serverUrl,
                 serverSettings);
 
-            this.socket = new SocketWrapper(result.socket, result.socketReader, result.socketWriter); //todo figure out based on transfer encoding.
+            this.socket = SocketWrapperFactory.CreateSocketWrapper(result);
 
             cancelTokenSource = new CancellationTokenSource();
 

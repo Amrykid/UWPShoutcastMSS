@@ -17,6 +17,7 @@ namespace UWPShoutcastMSS.Streaming
             internal DataWriter socketWriter;
             internal DataReader socketReader;
             internal string httpResponse;
+            internal KeyValuePair<string, string>[] httpResponseHeaders;
         }
 
 
@@ -49,7 +50,6 @@ namespace UWPShoutcastMSS.Streaming
                 case "https":
                     portStr = serverUrl.Port != 443 ? ":" + serverUrl.Port : "";
                     throw new NotImplementedException("https streams are currently not supported.");
-                    break;
             }
 
             StringBuilder requestBuilder = new StringBuilder();
@@ -76,6 +76,9 @@ namespace UWPShoutcastMSS.Streaming
 
             result.httpResponse = response;
 
+            string[] responseSplitByLine = response.Split(new string[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries);
+            result.httpResponseHeaders = ParseHttpResponseToKeyPairArray(responseSplitByLine);
+
             return result;
         }
 
@@ -95,7 +98,7 @@ namespace UWPShoutcastMSS.Streaming
 
             ShoutcastStreamFactoryInternalConnectResult result = await ConnectInternalAsync(serverUrl, settings);
 
-            SocketWrapper socketWrapper = new SocketWrapper(result.socket, result.socketReader, result.socketWriter); //todo, get based on transfer-encoding.
+            SocketWrapper socketWrapper = SocketWrapperFactory.CreateSocketWrapper(result);
 
             shoutStream = new ShoutcastStream(serverUrl, settings, socketWrapper);
 
