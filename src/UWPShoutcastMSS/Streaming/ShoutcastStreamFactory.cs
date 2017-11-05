@@ -157,6 +157,9 @@ namespace UWPShoutcastMSS.Streaming
                             case 400: //bad request
                             case 404: return ConnectionAction.FromFailure();
 
+                            case 503: //server limit reached
+                                return ConnectionAction.FromFailure(new Exception("Server limit reached."));
+
                             case 302: //Found. Has the new location in the LOCATION header.
                                 {
                                     var newLocation = headers.FirstOrDefault(x => x.Key.ToUpper().Equals("LOCATION"));
