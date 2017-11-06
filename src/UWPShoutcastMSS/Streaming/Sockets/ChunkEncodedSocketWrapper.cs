@@ -30,6 +30,7 @@ namespace UWPShoutcastMSS.Streaming.Sockets
 
             InitializeDataStream();
 
+            //todo make this based on the audio's sample size (waiting until we have at least 3 samples) instead of waiting for a hard-coded amount.
             Task.Delay(3000).ContinueWith(x =>
             {
                 //wait 3 seconds and then allow streaming to proceed.
