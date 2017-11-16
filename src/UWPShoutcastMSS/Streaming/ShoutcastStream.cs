@@ -313,19 +313,22 @@ namespace UWPShoutcastMSS.Streaming
                     connected = false;
                 }
 
-                cancelTokenSource.Token.ThrowIfCancellationRequested();
-                if (!connected)
+                if (!cancelTokenSource.IsCancellationRequested)
                 {
-                    try
+                    cancelTokenSource.Token.ThrowIfCancellationRequested();
+                    if (!connected)
                     {
-                        await ReconnectSocketsAsync().ConfigureAwait(false);
-                        Reconnected?.Invoke(this, EventArgs.Empty);
+                        try
+                        {
+                            await ReconnectSocketsAsync().ConfigureAwait(false);
+                            Reconnected?.Invoke(this, EventArgs.Empty);
 
-                        await ReadSampleAsync(request).ConfigureAwait(false);
-                    }
-                    catch (Exception)
-                    {
-                        MediaStreamSource.NotifyError(MediaStreamSourceErrorStatus.ConnectionToServerLost);
+                            await ReadSampleAsync(request).ConfigureAwait(false);
+                        }
+                        catch (Exception)
+                        {
+                            MediaStreamSource.NotifyError(MediaStreamSourceErrorStatus.ConnectionToServerLost);
+                        }
                     }
                 }
             }
