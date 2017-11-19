@@ -19,6 +19,8 @@ namespace UWPShoutcastMSS.Streaming.Sockets
             BaseSocket = baseSocket;
             SocketDataWriter = dataWriter;
 
+            SetInitialBufferStatus(true); //this should buffer before allowing playback.
+
             bufferStream = new InMemoryRandomAccessStream();
             bufferTaskCancelTokenSource = new CancellationTokenSource();
             bufferTask = Task.Run(function: ProcessStreamChunksAsync, cancellationToken: bufferTaskCancelTokenSource.Token);
@@ -29,13 +31,6 @@ namespace UWPShoutcastMSS.Streaming.Sockets
             SocketDataReader = new DataReader(clonedBufferStream.GetInputStreamAt(0));
 
             InitializeDataStream();
-
-            //todo make this based on the audio's sample size (waiting until we have at least 3 samples) instead of waiting for a hard-coded amount.
-            Task.Delay(3000).ContinueWith(x =>
-            {
-                //wait 3 seconds and then allow streaming to proceed.
-                InitialBufferLock.Release(1);
-            });
         }
 
         protected override void SubclassDispose()
@@ -72,6 +67,8 @@ namespace UWPShoutcastMSS.Streaming.Sockets
                 var lineEnding = rawDataReader.ReadString(2);
 
                 await bufferStream.WriteAsync(data);
+
+                HandleInitialBuffering(data.Length);
             }
         }
     }
