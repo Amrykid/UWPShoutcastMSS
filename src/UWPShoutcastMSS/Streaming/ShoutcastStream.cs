@@ -12,6 +12,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading;
 using UWPShoutcastMSS.Streaming.Sockets;
+using System.Net.Sockets;
 
 namespace UWPShoutcastMSS.Streaming
 {
@@ -344,6 +345,13 @@ namespace UWPShoutcastMSS.Streaming
             {
                 deferral.Complete();
             }
+        }
+
+        public bool PollConnection()
+        {
+            if (isDisposed) return false;
+
+            return !(DateTime.Now.Subtract(socket.LastReadTime) > TimeSpan.FromMinutes(5)); //if the last time read time was 5 minutes, assume we're disconnected.
         }
 
         private async Task ReadSampleAsync(MediaStreamSourceSampleRequest request)

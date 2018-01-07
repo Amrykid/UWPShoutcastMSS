@@ -18,6 +18,7 @@ namespace UWPShoutcastMSS.Streaming.Sockets
         protected DataReader SocketDataReader { get; set; }
         protected DataWriter SocketDataWriter { get; set; }
         protected SemaphoreSlim InitialBufferLock { get; set; } = new SemaphoreSlim(0, 1);
+        public DateTime LastReadTime { get; private set; } = DateTime.MinValue;
         public SocketWrapper(StreamSocket baseSocket, DataReader dataReader, DataWriter dataWriter)
         {
             if (baseSocket == null)
@@ -67,7 +68,7 @@ namespace UWPShoutcastMSS.Streaming.Sockets
                 initialBufferedAmount += size;
 
                 //todo create events that get bubbled up to the client so that they can show a "buffering" ui.
-                if (initialBufferedAmount > Math.Max(UWPShoutcastMSS.Parsers.Audio.MP3Parser.mp3_sampleSize, UWPShoutcastMSS.Parsers.Audio.AAC_ADTSParser.aac_adts_sampleSize) * 3)
+                if (initialBufferedAmount > Math.Max(UWPShoutcastMSS.Parsers.Audio.MP3Parser.mp3_sampleSize, UWPShoutcastMSS.Parsers.Audio.AAC_ADTSParser.aac_adts_sampleSize) * 10)
                 {
                     InitialBufferLock.Release(1);
                     isInitialBuffering = false;
@@ -88,6 +89,7 @@ namespace UWPShoutcastMSS.Streaming.Sockets
         public virtual async Task<string> ReadStringAsync(uint codeUnitCount)
         {
             await WaitForInitialBufferReadyAsync();
+            LastReadTime = DateTime.Now;
             var result = SocketDataReader.ReadString(codeUnitCount);
             InitialBufferLock.Release();
             return result;
@@ -96,6 +98,7 @@ namespace UWPShoutcastMSS.Streaming.Sockets
         public virtual async Task<IBuffer> ReadBufferAsync(uint length)
         {
             await WaitForInitialBufferReadyAsync();
+            LastReadTime = DateTime.Now;
             var result = SocketDataReader.ReadBuffer(length);
             InitialBufferLock.Release();
             return result;
@@ -104,6 +107,7 @@ namespace UWPShoutcastMSS.Streaming.Sockets
         public virtual async Task<byte> ReadByteAsync()
         {
             await WaitForInitialBufferReadyAsync();
+            LastReadTime = DateTime.Now;
             var result = SocketDataReader.ReadByte();
             InitialBufferLock.Release();
             return result;
@@ -112,10 +116,15 @@ namespace UWPShoutcastMSS.Streaming.Sockets
         public virtual async Task ReadBytesAsync(byte[] buffer)
         {
             await WaitForInitialBufferReadyAsync();
+            LastReadTime = DateTime.Now;
             SocketDataReader.ReadBytes(buffer);
             InitialBufferLock.Release();
         }
 
+        public virtual void WriteByte(byte theByte)
+        {
+            SocketDataWriter.WriteByte(theByte);
+        }
 
         protected virtual void SubclassDispose() { }
 
@@ -157,6 +166,11 @@ namespace UWPShoutcastMSS.Streaming.Sockets
             Dispose(true);
             // TODO: uncomment the following line if the finalizer is overridden above.
             // GC.SuppressFinalize(this);
+        }
+
+        internal void WriteByteAsync(byte singleByte)
+        {
+            throw new NotImplementedException();
         }
         #endregion
     }
