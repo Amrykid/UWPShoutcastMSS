@@ -48,6 +48,8 @@ namespace UWPShoutcastMSS.Streaming.Sockets
             while (!response.EndsWith(Environment.NewLine))
             //loop until we get the line-ending signifying the end
             {
+                if (bufferTaskCancelTokenSource.IsCancellationRequested) return -1;
+
                 await rawDataReader.LoadAsync(1);
                 response += rawDataReader.ReadString(1);
             }
@@ -60,6 +62,8 @@ namespace UWPShoutcastMSS.Streaming.Sockets
             while (!bufferTaskCancelTokenSource.IsCancellationRequested)
             {
                 int chunkLength = await ParseChunkLengthAsync();
+
+                if (bufferTaskCancelTokenSource.IsCancellationRequested) return;
 
                 await rawDataReader.LoadAsync((uint)(chunkLength + 2)); //extra 2 for the excluded line ending.
 
