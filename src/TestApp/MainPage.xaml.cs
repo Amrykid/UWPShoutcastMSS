@@ -53,6 +53,12 @@ namespace TestApp
                     Name = "R/a/dio (MP3, 192kb, chunk-encoded)",
                     Url = new Uri("http://relay0.r-a-d.io/main.mp3"),
                     RelativePath = ""
+                },
+                new StationItem
+                {
+                    Name = "Unknown",
+                    Url = new Uri("http://icy.ihrcast.arn.com.au/au_004_icy"),
+                    RelativePath = ""
                 }
             };
 

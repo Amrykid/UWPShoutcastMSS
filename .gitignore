@@ -132,7 +132,6 @@ UpgradeLog*.XML
 *.py[co]
 
 # Packages
-*.egg
 *.egg-info
 dist
 build
@@ -159,3 +158,8 @@ pip-log.txt
 src/Neptunium/AppPackages/
 src/Neptunium/_pkginfo.txt
 src/Neptunium/BundleArtifacts/
+/.vs/UWPShoutcastMSS/DesignTimeBuild/.dtbcache
+/.vs/UWPShoutcastMSS/v15/Server/sqlite3/db.lock
+/.vs/UWPShoutcastMSS/v15/Server/sqlite3/storage.ide
+/.vs/UWPShoutcastMSS/v15/Server/sqlite3/storage.ide-shm
+/.vs/UWPShoutcastMSS/v15/Server/sqlite3/storage.ide-wal
