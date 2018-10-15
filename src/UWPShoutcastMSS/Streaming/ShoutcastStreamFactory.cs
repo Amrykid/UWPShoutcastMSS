@@ -168,7 +168,7 @@ namespace UWPShoutcastMSS.Streaming
                             case 200: return ConnectionAction.FromSuccess();
 
                             case 400: //bad request
-                            case 404: return ConnectionAction.FromFailure();
+                            case 404: return ConnectionAction.FromFailure(new Exception("Not found"));
 
                             case 503: //server limit reached
                                 return ConnectionAction.FromFailure(new Exception("Server limit reached."));
